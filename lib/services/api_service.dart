@@ -19,7 +19,6 @@ class ApiService {
       final data = jsonDecode(response.body);
 
       if (data['status'] == 'success') {
-        // Guarda os dados do utilizador localmente no telemóvel/TV Box
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('is_logged_in', true);
         await prefs.setString('user_name', data['user']['name']);
