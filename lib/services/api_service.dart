@@ -30,6 +30,7 @@ class ApiService {
       return {"status": "error", "message": "Erro de conexão com o servidor: $e"};
     }
   }
+
   // Função para registar uma nova conta
   static Future> register(String username, String password, String fullName) async {
     try {
@@ -50,7 +51,7 @@ class ApiService {
   }
 
   // Função para buscar as listas de canais e filmes
-  static Future> getContent(String type) async {
+  static Future<dynamic> getContent(String type) async {
     try {
       final response = await http.get(
         Uri.parse("${ApiConfig.contentEndpoint}?type=$type"),
