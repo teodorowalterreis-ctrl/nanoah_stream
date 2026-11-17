@@ -18,9 +18,6 @@ jobs:
           flutter-version: '3.19.6'
           channel: 'stable'
       - run: flutter pub get
-      - name: Install Android SDK 36
-        run: |
-          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" || yes | $ANDROID_HOME/tools/bin/sdkmanager "platforms;android-36" || yes | sdkmanager "platforms;android-36" || true
       - name: Accept Android Licenses
         run: yes | flutter doctor --android-licenses || true
       - name: Build APK Release
