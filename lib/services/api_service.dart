@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/api_config.dart';
 
 class ApiService {
-  static Future> login(String username, String password) async {
+  static Future<dynamic> login(String username, String password) async {
     try {
       final response = await http.post(
         Uri.parse(ApiConfig.loginEndpoint),
@@ -29,7 +29,7 @@ class ApiService {
     }
   }
 
-  static Future> register(String username, String password, String fullName) async {
+  static Future<dynamic> register(String username, String password, String fullName) async {
     try {
       final response = await http.post(
         Uri.parse(ApiConfig.registerEndpoint),
