@@ -22,7 +22,8 @@ jobs:
         run: yes | flutter doctor --android-licenses || true
       - name: Build APK Release
         run: |
-          flutter build apk --release || (echo '=== ERRO DETECTADO NO GRADLE ===' && cat android/app/build.gradle && exit 1)
+          yes | sdkmanager "platforms;android-36" 
+      flutter build apk --release || (echo '=== ERRO DETECTADO NO GRADLE ===' && cat android/app/build.gradle && exit 1)
       - uses: actions/upload-artifact@v4
         with:
           name: app-release
