@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/api_config.dart';
 
 class ApiService {
-  // Função para fazer o login
   static Future> login(String username, String password) async {
     try {
       final response = await http.post(
@@ -30,7 +29,6 @@ class ApiService {
     }
   }
 
-  // Função para registar uma nova conta
   static Future> register(String username, String password, String fullName) async {
     try {
       final response = await http.post(
@@ -49,7 +47,6 @@ class ApiService {
     }
   }
 
-  // Função para buscar as listas de canais e filmes
   static Future<dynamic> getContent(String type) async {
     try {
       final response = await http.get(
