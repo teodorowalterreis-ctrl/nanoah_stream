@@ -1,13 +1,40 @@
 import 'package:flutter/material.dart';
-import 'package:media_kit/media_kit.dart'; // Importante para o motor de vídeo
+import 'package:media_kit/media_kit.dart';
 import 'screens/login_screen.dart';
 
-void main() {
-  // 1. Garante que os bindings do Flutter estão prontos
+void main() async {
+  // Garante que o motor do Flutter está pronto
   WidgetsFlutterBinding.ensureInitialized();
   
-  // 2. INICIALIZAÇÃO OBRIGATÓRIA DO MEDIA_KIT (Faltava este passo!)
-  MediaKit.ensureInitialized();
+  // Inicializa o MediaKit de forma segura
+  try {
+    MediaKit.ensureInitialized();
+  } catch (e) {
+    debugPrint("Erro ao inicializar MediaKit: $e");
+  }
+
+  // CAPTURA DE ERROS: Se algo falhar no arranque, mostra no ecrã em vez de ficar preto
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.dumpErrorToConsole(details);
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          backgroundColor: Colors.red[900],
+          body: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Center(
+              child: SingleChildScrollView(
+                child: Text(
+                  'ERRO NO ARRANQUE:\n\n${details.exception}',
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  };
 
   runApp(const NanoahStreamApp());
 }
@@ -23,7 +50,6 @@ class NanoahStreamApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
-        // Deixa o tema geral escuro por padrão combinando com o app
         brightness: Brightness.dark, 
       ),
       home: const LoginScreen(),
