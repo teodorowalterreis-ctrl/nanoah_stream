@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
+import 'package:video_player/video_player.dart';
 
 class PlayerScreen extends StatefulWidget {
   final String streamUrl;
@@ -17,43 +16,36 @@ class PlayerScreen extends StatefulWidget {
 }
 
 class _PlayerScreenState extends State<PlayerScreen> {
-  Player? _player;
-  VideoController? _controller;
-  bool _isLoading = true;
+  late VideoPlayerController _controller;
+  bool _isInitialized = false;
   String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _initializePlayer();
+    _initVideoPlayer();
   }
 
-  Future<void> _initializePlayer() async {
+  Future<void> _initVideoPlayer() async {
     try {
-      // 1. Garante que o MediaKit está inicializado localmente antes de usar a API
-      MediaKit.ensureInitialized();
-
-      print("A inicializar player com URL: ${widget.streamUrl}");
+      print("A iniciar VideoPlayer com URL: ${widget.streamUrl}");
       
-      // 2. Instancia o player e o controlador com segurança
-      _player = Player();
-      _controller = VideoController(_player!);
+      _controller = VideoPlayerController.networkUrl(Uri.parse(widget.streamUrl));
 
-      // 3. Abre a stream
-      await _player!.open(Media(widget.streamUrl));
-
+      await _controller.initialize();
+      
       if (mounted) {
         setState(() {
-          _isLoading = false;
+          _isInitialized = true;
         });
+        _controller.play(); // Inicia a reprodução automática
       }
     } catch (e, stackTrace) {
-      print("ERRO CRÍTICO NO PLAYER: $e");
+      print("ERRO NO VIDEO_PLAYER: $e");
       print(stackTrace);
       if (mounted) {
         setState(() {
           _errorMessage = e.toString();
-          _isLoading = false;
         });
       }
     }
@@ -61,7 +53,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   void dispose() {
-    _player?.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -72,33 +64,33 @@ class _PlayerScreenState extends State<PlayerScreen> {
       body: Stack(
         children: [
           Center(
-            child: _isLoading
-                ? const CircularProgressIndicator(color: Colors.blueAccent)
-                : _errorMessage != null
-                    ? Padding(
-                        padding: const EdgeInsets.all(24.0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.error_outline, color: Colors.redAccent, size: 48),
-                            const SizedBox(height: 16),
-                            const Text(
-                              "FALHA AO REPRODUZIR VÍDEO",
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              _errorMessage!,
-                              style: const TextStyle(color: Colors.redAccent, fontSize: 13),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
+            child: _errorMessage != null
+                ? Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline, color: Colors.redAccent, size: 48),
+                        const SizedBox(height: 16),
+                        const Text(
+                          "FALHA AO REPRODUZIR VÍDEO",
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                         ),
+                        const SizedBox(height: 10),
+                        Text(
+                          _errorMessage!,
+                          style: const TextStyle(color: Colors.redAccent, fontSize: 13),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  )
+                : _isInitialized
+                    ? AspectRatio(
+                        aspectRatio: _controller.value.aspectRatio,
+                        child: VideoPlayer(_controller),
                       )
-                    : Video(
-                        controller: _controller!,
-                        fit: BoxFit.contain,
-                      ),
+                    : const CircularProgressIndicator(color: Colors.blueAccent),
           ),
           
           // Barra superior com o título e botão de voltar
