@@ -17,19 +17,48 @@ class PlayerScreen extends StatefulWidget {
 }
 
 class _PlayerScreenState extends State<PlayerScreen> {
-  late final Player _player = Player();
-  late final VideoController _controller = VideoController(_player);
+  Player? _player;
+  VideoController? _controller;
+  bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    // Inicia a reprodução do link do canal ou filme
-    _player.open(Media(widget.streamUrl));
+    _initializePlayer();
+  }
+
+  Future<void> _initializePlayer() async {
+    try {
+      print("A inicializar player com URL: ${widget.streamUrl}");
+      
+      // Instancia o player e o controlador com segurança assíncrona
+      _player = Player();
+      _controller = VideoController(_player!);
+
+      // Abre a stream
+      await _player!.open(Media(widget.streamUrl));
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e, stackTrace) {
+      print("ERRO CRÍTICO NO PLAYER: $e");
+      print(stackTrace);
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
   void dispose() {
-    _player.dispose();
+    _player?.dispose();
     super.dispose();
   }
 
@@ -39,14 +68,38 @@ class _PlayerScreenState extends State<PlayerScreen> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Player em ecrã cheio
+          // Conteúdo central (Loading, Erro detalhado ou o Vídeo a funcionar)
           Center(
-            child: Video(
-              controller: _controller,
-              fit: BoxFit.contain,
-            ),
+            child: _isLoading
+                ? const CircularProgressIndicator(color: Colors.blueAccent)
+                : _errorMessage != null
+                    ? Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.error_outline, color: Colors.redAccent, size: 48),
+                            const SizedBox(height: 16),
+                            const Text(
+                              "FALHA AO REPRODUZIR VÍDEO",
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              _errorMessage!,
+                              style: const TextStyle(color: Colors.redAccent, fontSize: 13),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      )
+                    : Video(
+                        controller: _controller!,
+                        fit: BoxFit.contain,
+                      ),
           ),
-          // Barra superior com o título e botão de voltar (estilo minimalista)
+          
+          // Barra superior com o título e botão de voltar (estilo minimalista original)
           Positioned(
             top: 0,
             left: 0,
