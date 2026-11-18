@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:media_kit/media_kit.dart';
+// import 'package:media_kit/media_kit.dart'; // Comentado temporariamente para teste
 import 'screens/login_screen.dart';
 
 void main() async {
-  // 1. Garante que o motor do Flutter está ligado
   WidgetsFlutterBinding.ensureInitialized();
   
-  // 2. Inicializa o MediaKit obrigatoriamente antes de qualquer runApp ou uso de vídeo
-  MediaKit.ensureInitialized();
+  // MediaKit.ensureInitialized(); // Comentado temporariamente para teste
 
   runApp(const NanoahStreamApp());
 }
