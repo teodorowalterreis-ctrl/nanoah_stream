@@ -30,13 +30,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Future<void> _initializePlayer() async {
     try {
+      // 1. Garante que o MediaKit está inicializado localmente antes de usar a API
+      MediaKit.ensureInitialized();
+
       print("A inicializar player com URL: ${widget.streamUrl}");
       
-      // Instancia o player e o controlador com segurança assíncrona
+      // 2. Instancia o player e o controlador com segurança
       _player = Player();
       _controller = VideoController(_player!);
 
-      // Abre a stream
+      // 3. Abre a stream
       await _player!.open(Media(widget.streamUrl));
 
       if (mounted) {
@@ -68,7 +71,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Conteúdo central (Loading, Erro detalhado ou o Vídeo a funcionar)
           Center(
             child: _isLoading
                 ? const CircularProgressIndicator(color: Colors.blueAccent)
@@ -99,7 +101,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       ),
           ),
           
-          // Barra superior com o título e botão de voltar (estilo minimalista original)
+          // Barra superior com o título e botão de voltar
           Positioned(
             top: 0,
             left: 0,
