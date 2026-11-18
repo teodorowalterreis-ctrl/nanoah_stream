@@ -26,21 +26,36 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   void _loadData() async {
     setState(() => _isLoading = true);
 
-    // Carrega Canais Ao Vivo e Filmes em paralelo
-    final liveRes = await ApiService.getContent('live');
-    final movieRes = await ApiService.getContent('movie');
+    try {
+      final liveRes = await ApiService.getContent('live');
+      final movieRes = await ApiService.getContent('movie');
 
-    setState(() {
-      if (liveRes['status'] == 'success') _liveCategories = liveRes['data'];
-      if (movieRes['status'] == 'success') _movieCategories = movieRes['data'];
-      _isLoading = false;
-    });
+      setState(() {
+        // Trata diferentes formatos possíveis de retorno da API com segurança
+        if (liveRes is Map && liveRes['status'] == 'success') {
+          _liveCategories = liveRes['data'] ?? [];
+        } else if (liveRes is List) {
+          _liveCategories = liveRes;
+        }
+
+        if (movieRes is Map && movieRes['status'] == 'success') {
+          _movieCategories = movieRes['data'] ?? [];
+        } else if (movieRes is List) {
+          _movieCategories = movieRes;
+        }
+
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      debugPrint("Erro ao carregar dados na Home: $e");
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19), // Fundo ultra-moderno minimalista
+      backgroundColor: const Color(0xFF0B0F19),
       appBar: AppBar(
         backgroundColor: const Color(0xFF111827),
         elevation: 0,
@@ -80,8 +95,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   Widget _buildCategoryList(List<dynamic> categories) {
     if (categories.isEmpty) {
-      const Center(
-        child: Text("Nenhum conteúdo disponível", style: TextStyle(color: Colors.grey)),
+      return const Center(
+        child: Text(
+          "Nenhum conteúdo disponível",
+          style: TextStyle(color: Colors.grey, fontSize: 16),
+        ),
       );
     }
 
@@ -90,7 +108,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       itemCount: categories.length,
       itemBuilder: (context, catIndex) {
         final category = categories[catIndex];
-        final items = category['items'] as List<dynamic>;
+        final items = category['items'] as List<dynamic>? ?? [];
 
         if (items.isEmpty) return const SizedBox.shrink();
 
@@ -100,7 +118,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8.0),
               child: Text(
-                category['category_name'].toUpperCase(),
+                (category['category_name'] ?? 'Categoria').toString().toUpperCase(),
                 style: const TextStyle(
                   color: Colors.white70,
                   fontSize: 14,
@@ -122,13 +140,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       width: 130,
                       child: TvFocusCard(
                         onTap: () {
-                          // Abre o player de vídeo ao clicar no item
                           Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (context) => PlayerScreen(
-                                streamUrl: item['stream_url'],
-                                title: item['title'],
+                                streamUrl: item['stream_url'] ?? '',
+                                title: item['title'] ?? 'Sem Título',
                               ),
                             ),
                           );
@@ -157,7 +174,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               Padding(
                                 padding: const EdgeInsets.all(8.0),
                                 child: Text(
-                                  item['title'],
+                                  item['title'] ?? 'Sem Título',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 12,
