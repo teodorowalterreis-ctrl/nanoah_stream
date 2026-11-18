@@ -3,38 +3,11 @@ import 'package:media_kit/media_kit.dart';
 import 'screens/login_screen.dart';
 
 void main() async {
-  // Garante que o motor do Flutter está pronto
+  // 1. Garante que o motor do Flutter está ligado
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Inicializa o MediaKit de forma segura
-  try {
-    MediaKit.ensureInitialized();
-  } catch (e) {
-    debugPrint("Erro ao inicializar MediaKit: $e");
-  }
-
-  // CAPTURA DE ERROS: Se algo falhar no arranque, mostra no ecrã em vez de ficar preto
-  FlutterError.onError = (FlutterErrorDetails details) {
-    FlutterError.dumpErrorToConsole(details);
-    runApp(
-      MaterialApp(
-        home: Scaffold(
-          backgroundColor: Colors.red[900],
-          body: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Center(
-              child: SingleChildScrollView(
-                child: Text(
-                  'ERRO NO ARRANQUE:\n\n${details.exception}',
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  };
+  // 2. Inicializa o MediaKit obrigatoriamente antes de qualquer runApp ou uso de vídeo
+  MediaKit.ensureInitialized();
 
   runApp(const NanoahStreamApp());
 }
