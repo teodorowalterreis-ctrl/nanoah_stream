@@ -13,14 +13,20 @@ class ApiService {
           "username": username,
           "password": password,
         }),
-      );
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.body.isEmpty) {
+        return {"status": "error", "message": "Servidor não retornou resposta."};
+      }
 
       final data = jsonDecode(response.body);
 
-      if (data['status'] == 'success') {
+      if (data is Map && data['status'] == 'success') {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('is_logged_in', true);
-        await prefs.setString('user_name', data['user']['name']);
+        if (data['user'] != null && data['user']['name'] != null) {
+          await prefs.setString('user_name', data['user']['name']);
+        }
       }
 
       return data;
@@ -39,7 +45,11 @@ class ApiService {
           "password": password,
           "full_name": fullName,
         }),
-      );
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.body.isEmpty) {
+        return {"status": "error", "message": "Servidor não retornou resposta."};
+      }
 
       return jsonDecode(response.body);
     } catch (e) {
@@ -51,7 +61,9 @@ class ApiService {
     try {
       final response = await http.get(
         Uri.parse("${ApiConfig.contentEndpoint}?type=$type"),
-      );
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.body.isEmpty) return [];
       return jsonDecode(response.body);
     } catch (e) {
       return {"status": "error", "message": "Erro ao carregar conteúdos: $e"};
