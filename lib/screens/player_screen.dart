@@ -4,7 +4,7 @@ import 'package:video_player/video_player.dart';
 class PlayerScreen extends StatefulWidget {
   final String streamUrl;
   final String title;
-  final List>? channels;
+  final List? channels;
   final int initialIndex;
 
   const PlayerScreen({
@@ -25,14 +25,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
   String? _errorMessage;
   bool _showControls = true;
 
-  late List> _playlist;
+  late List _playlist;
   late int _currentIndex;
 
   String get _currentTitle {
     if (_playlist.isNotEmpty &&
         _currentIndex >= 0 &&
         _currentIndex < _playlist.length) {
-      return _playlist[_currentIndex]['title'] ?? widget.title;
+      return (_playlist[_currentIndex]['title'] ?? widget.title).toString();
     }
     return widget.title;
   }
@@ -41,7 +41,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (_playlist.isNotEmpty &&
         _currentIndex >= 0 &&
         _currentIndex < _playlist.length) {
-      return _playlist[_currentIndex]['stream_url'] ?? widget.streamUrl;
+      return (_playlist[_currentIndex]['stream_url'] ?? widget.streamUrl)
+          .toString();
     }
     return widget.streamUrl;
   }
@@ -56,7 +57,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     super.initState();
     if (widget.channels != null && widget.channels!.isNotEmpty) {
       _playlist = widget.channels!;
-      _currentIndex = widget.initialIndex.clamp(0, _playlist.length - 1);
+      _currentIndex =
+          widget.initialIndex.clamp(0, _playlist.length - 1).toInt();
     } else {
       _playlist = [
         {'title': widget.title, 'stream_url': widget.streamUrl},

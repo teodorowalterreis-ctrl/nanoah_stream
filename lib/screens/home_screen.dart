@@ -14,14 +14,14 @@ class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   int _navIndex = 0;
-  bool _isGridView = true; // true = Molduras, false = Lista organizada
+  bool _isGridView = true;
   bool _isLoading = true;
   bool _isLoggedIn = false;
   String _userName = 'Visitante';
 
   List<dynamic> _liveCategories = [];
   List<dynamic> _movieCategories = [];
-  final List> _customPlaylists = [];
+  final List _customPlaylists = [];
 
   @override
   void initState() {
@@ -68,7 +68,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _openPlayer(List<dynamic> categoryItems, int currentIndex) {
     final item = categoryItems[currentIndex];
-    final List> playlist = [];
+    final List playlist = [];
 
     for (final entry in categoryItems) {
       if (entry is Map) {
@@ -520,12 +520,14 @@ class _HomeScreenState extends State<HomeScreen>
                             Icons.playlist_play,
                             color: Colors.blueAccent,
                           ),
-                          title: Text(
-                            pl['name'] ?? '',
-                            style: const TextStyle(color: Colors.white),
-                          ),
+                          title: (pl['name'] ?? '').toString().isEmpty
+                              ? const SizedBox.shrink()
+                              : Text(
+                                  (pl['name'] ?? '').toString(),
+                                  style: const TextStyle(color: Colors.white),
+                                ),
                           subtitle: Text(
-                            pl['url'] ?? '',
+                            (pl['url'] ?? '').toString(),
                             style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 12,
