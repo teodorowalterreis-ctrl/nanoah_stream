@@ -16,7 +16,7 @@ class PlayerScreen extends StatefulWidget {
 }
 
 class _PlayerScreenState extends State<PlayerScreen> {
-  late VideoPlayerController _controller;
+  VideoPlayerController? _controller;
   bool _isInitialized = false;
   String? _errorMessage;
 
@@ -28,21 +28,28 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Future<void> _initVideoPlayer() async {
     try {
-      print("A iniciar VideoPlayer com URL: ${widget.streamUrl}");
-      
-      _controller = VideoPlayerController.networkUrl(Uri.parse(widget.streamUrl));
+      final cleanUrl = widget.streamUrl.trim();
+      if (cleanUrl.isEmpty) {
+        throw Exception('URL do vídeo está vazio.');
+      }
 
-      await _controller.initialize();
-      
+      final uri = Uri.tryParse(cleanUrl);
+      if (uri == null || (!uri.isScheme('http') && !uri.isScheme('https'))) {
+        throw Exception('URL inválido ou sem http/https: "$cleanUrl"');
+      }
+
+      final controller = VideoPlayerController.networkUrl(uri);
+      _controller = controller;
+
+      await controller.initialize();
+
       if (mounted) {
         setState(() {
           _isInitialized = true;
         });
-        _controller.play(); // Inicia a reprodução automática
+        await controller.play();
       }
-    } catch (e, stackTrace) {
-      print("ERRO NO VIDEO_PLAYER: $e");
-      print(stackTrace);
+    } catch (e) {
       if (mounted) {
         setState(() {
           _errorMessage = e.toString();
@@ -53,7 +60,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
@@ -70,30 +77,45 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.error_outline, color: Colors.redAccent, size: 48),
+                        const Icon(Icons.error_outline,
+                            color: Colors.redAccent, size: 48),
                         const SizedBox(height: 16),
                         const Text(
-                          "FALHA AO REPRODUZIR VÍDEO",
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                          'FALHA AO REPRODUZIR VÍDEO',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
                         ),
                         const SizedBox(height: 10),
                         Text(
                           _errorMessage!,
-                          style: const TextStyle(color: Colors.redAccent, fontSize: 13),
+                          style: const TextStyle(
+                            color: Colors.redAccent,
+                            fontSize: 13,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'URL: ${widget.streamUrl}',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                       ],
                     ),
                   )
-                : _isInitialized
+                : _isInitialized && _controller != null
                     ? AspectRatio(
-                        aspectRatio: _controller.value.aspectRatio,
-                        child: VideoPlayer(_controller),
+                        aspectRatio: _controller!.value.aspectRatio,
+                        child: VideoPlayer(_controller!),
                       )
                     : const CircularProgressIndicator(color: Colors.blueAccent),
           ),
-          
-          // Barra superior com o título e botão de voltar
           Positioned(
             top: 0,
             left: 0,
@@ -104,7 +126,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Colors.black.withOpacity(0.8), Colors.transparent],
+                  colors: [
+                    Colors.black.withOpacity(0.8),
+                    Colors.transparent,
+                  ],
                 ),
               ),
               child: Row(
