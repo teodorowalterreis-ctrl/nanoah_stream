@@ -45,7 +45,6 @@ class _HomeScreenState extends State<HomeScreen>
 
       if (!mounted) return;
       setState(() {
-        // Trata diferentes formatos possíveis de retorno da API com segurança
         if (liveRes is Map && liveRes['status'] == 'success') {
           _liveCategories = liveRes['data'] ?? [];
         } else if (liveRes is List) {
@@ -69,12 +68,16 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _openPlayer(List<dynamic> categoryItems, int currentIndex) {
     final item = categoryItems[currentIndex];
-    final playlist = categoryItems
-        .map>((entry) => {
-              'title': (entry['title'] ?? 'Sem Título').toString(),
-              'stream_url': (entry['stream_url'] ?? '').toString(),
-            })
-        .toList();
+    final List> playlist = [];
+
+    for (final entry in categoryItems) {
+      if (entry is Map) {
+        playlist.add({
+          'title': (entry['title'] ?? 'Sem Título').toString(),
+          'stream_url': (entry['stream_url'] ?? '').toString(),
+        });
+      }
+    }
 
     Navigator.push(
       context,
