@@ -6,6 +6,7 @@ class PlayerScreen extends StatefulWidget {
   final String title;
   final List? channels;
   final int initialIndex;
+  final bool autoPlay;
 
   const PlayerScreen({
     super.key,
@@ -13,6 +14,7 @@ class PlayerScreen extends StatefulWidget {
     required this.title,
     this.channels,
     this.initialIndex = 0,
+    this.autoPlay = true,
   });
 
   @override
@@ -101,7 +103,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
       setState(() {
         _isInitialized = true;
       });
-      await controller.play();
+      if (widget.autoPlay) {
+        await controller.play();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -190,6 +194,34 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               fontSize: 12,
                             ),
                             textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 20),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 8,
+                            alignment: WrapAlignment.center,
+                            children: [
+                              OutlinedButton.icon(
+                                onPressed: () => _initVideoPlayer(_currentUrl),
+                                icon: const Icon(Icons.refresh,
+                                    color: Colors.white, size: 18),
+                                label: const Text(
+                                  'Tentar novamente',
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                              ),
+                              if (_canGoNext)
+                                ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blueAccent,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                  onPressed: _nextChannel,
+                                  icon: const Icon(Icons.skip_next_rounded,
+                                      size: 18),
+                                  label: const Text('Próximo canal'),
+                                ),
+                            ],
                           ),
                         ],
                       ),

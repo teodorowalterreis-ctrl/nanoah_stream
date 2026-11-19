@@ -12,12 +12,29 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
+  static const List<String> _quickCategories = [
+    'Todos',
+    'Geral',
+    'Notícias',
+    'Filmes',
+    'Religião',
+    'Música',
+    'Entretenimento',
+    'Desporto',
+    'Infantil',
+  ];
+
   late TabController _tabController;
+  final TextEditingController _searchController = TextEditingController();
+
   int _navIndex = 0;
   bool _isGridView = true;
   bool _isLoading = true;
   bool _isLoggedIn = false;
+  bool _autoPlayEnabled = true;
   String _userName = 'Visitante';
+  String _selectedCategory = 'Todos';
+  String _searchQuery = '';
 
   List<dynamic> _liveCategories = [];
   List<dynamic> _movieCategories = [];
@@ -33,6 +50,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -66,6 +84,118 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  String _normalizeText(String input) {
+    return input
+        .toLowerCase()
+        .replaceAll('á', 'a')
+        .replaceAll('à', 'a')
+        .replaceAll('â', 'a')
+        .replaceAll('ã', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('ê', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ô', 'o')
+        .replaceAll('õ', 'o')
+        .replaceAll('ú', 'u')
+        .replaceAll('ç', 'c')
+        .trim();
+  }
+
+  bool _matchesCategoryFilter(String rawCategory, String rawTitle) {
+    if (_selectedCategory == 'Todos') return true;
+
+    final filter = _normalizeText(_selectedCategory);
+    final cat = _normalizeText(rawCategory);
+    final title = _normalizeText(rawTitle);
+
+    if (cat.contains(filter) || title.contains(filter)) {
+      return true;
+    }
+
+    switch (filter) {
+      case 'noticias':
+        return cat.contains('news') ||
+            cat.contains('jornal') ||
+            title.contains('news') ||
+            title.contains('jornal');
+      case 'musica':
+        return cat.contains('music') ||
+            title.contains('trace') ||
+            title.contains('mtv') ||
+            title.contains('music');
+      case 'desporto':
+        return cat.contains('esporte') ||
+            cat.contains('sport') ||
+            cat.contains('futebol') ||
+            title.contains('sport') ||
+            title.contains('futebol');
+      case 'filmes':
+        return cat.contains('filme') ||
+            cat.contains('movie') ||
+            cat.contains('cinema') ||
+            cat.contains('ficcao');
+      case 'infantil':
+        return cat.contains('kids') ||
+            cat.contains('crianca') ||
+            cat.contains('desenho') ||
+            title.contains('kids') ||
+            title.contains('cartoon');
+      case 'religiao':
+        return cat.contains('gospel') ||
+            cat.contains('igreja') ||
+            cat.contains('catolic') ||
+            cat.contains('evangel');
+      case 'entretenimento':
+        return cat.contains('varied') ||
+            cat.contains('novela') ||
+            cat.contains('show') ||
+            cat.contains('serie');
+      case 'geral':
+        return cat.contains('geral') ||
+            cat.contains('aberta') ||
+            cat.contains('nacional') ||
+            cat.contains('internacional') ||
+            cat.contains('ao vivo');
+      default:
+        return false;
+    }
+  }
+
+  List<dynamic> _filterCategories(List<dynamic> categories) {
+    final query = _normalizeText(_searchQuery);
+    final List<dynamic> filtered = [];
+
+    for (final cat in categories) {
+      if (cat is! Map) continue;
+      final catName = (cat['category_name'] ?? 'Categoria').toString();
+      final rawItems = cat['items'] as List<dynamic>? ?? [];
+      final List<dynamic> matchingItems = [];
+
+      for (final item in rawItems) {
+        if (item is! Map) continue;
+        final title = (item['title'] ?? 'Sem Título').toString();
+        final matchesCat = _matchesCategoryFilter(catName, title);
+        final matchesSearch = query.isEmpty ||
+            _normalizeText(title).contains(query) ||
+            _normalizeText(catName).contains(query);
+
+        if (matchesCat && matchesSearch) {
+          matchingItems.add(item);
+        }
+      }
+
+      if (matchingItems.isNotEmpty) {
+        filtered.add({
+          ...cat,
+          'items': matchingItems,
+        });
+      }
+    }
+
+    return filtered;
+  }
+
   void _openPlayer(List<dynamic> categoryItems, int currentIndex) {
     final item = categoryItems[currentIndex];
     final List playlist = [];
@@ -87,6 +217,7 @@ class _HomeScreenState extends State<HomeScreen>
           title: (item['title'] ?? 'Sem Título').toString(),
           channels: playlist,
           initialIndex: currentIndex,
+          autoPlay: _autoPlayEnabled,
         ),
       ),
     );
@@ -308,12 +439,89 @@ class _HomeScreenState extends State<HomeScreen>
       );
     }
 
-    return TabBarView(
-      controller: _tabController,
+    return Column(
       children: [
-        _buildCategoryList(_liveCategories),
-        _buildCategoryList(_movieCategories),
+        _buildFilterBar(),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildCategoryList(_filterCategories(_liveCategories)),
+              _buildCategoryList(_filterCategories(_movieCategories)),
+            ],
+          ),
+        ),
       ],
+    );
+  }
+
+  Widget _buildFilterBar() {
+    return Container(
+      color: const Color(0xFF111827),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+      child: Column(
+        children: [
+          TextField(
+            controller: _searchController,
+            style: const TextStyle(color: Colors.white, fontSize: 14),
+            onChanged: (val) => setState(() => _searchQuery = val),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: 'Pesquisar canal...',
+              hintStyle: const TextStyle(color: Colors.white54, fontSize: 13),
+              prefixIcon:
+                  const Icon(Icons.search, color: Colors.white54, size: 20),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.close,
+                          color: Colors.white54, size: 18),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    )
+                  : null,
+              filled: true,
+              fillColor: const Color(0xFF1F2937),
+              contentPadding: const EdgeInsets.symmetric(vertical: 8),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 34,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _quickCategories.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final cat = _quickCategories[index];
+                final isSelected = _selectedCategory == cat;
+                return ChoiceChip(
+                  label: Text(
+                    cat,
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : Colors.white70,
+                      fontSize: 12,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                  ),
+                  selected: isSelected,
+                  selectedColor: Colors.blueAccent,
+                  backgroundColor: const Color(0xFF1F2937),
+                  side: BorderSide.none,
+                  visualDensity: VisualDensity.compact,
+                  onSelected: (_) => setState(() => _selectedCategory = cat),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -535,6 +743,13 @@ class _HomeScreenState extends State<HomeScreen>
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete_outline,
+                                color: Colors.white54),
+                            onPressed: () {
+                              setState(() => _customPlaylists.removeAt(index));
+                            },
+                          ),
                         ),
                       );
                     },
@@ -590,6 +805,62 @@ class _HomeScreenState extends State<HomeScreen>
             activeColor: Colors.blueAccent,
             value: _isGridView,
             onChanged: (val) => setState(() => _isGridView = val),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          color: const Color(0xFF1F2937),
+          child: SwitchListTile(
+            title: const Text(
+              'Reprodução automática',
+              style: TextStyle(color: Colors.white),
+            ),
+            subtitle: const Text(
+              'Iniciar o vídeo automaticamente ao abrir o canal',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            activeColor: Colors.blueAccent,
+            value: _autoPlayEnabled,
+            onChanged: (val) => setState(() => _autoPlayEnabled = val),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          color: const Color(0xFF1F2937),
+          child: ListTile(
+            leading:
+                const Icon(Icons.cleaning_services_outlined, color: Colors.grey),
+            title: const Text(
+              'Limpar listas adicionadas',
+              style: TextStyle(color: Colors.white),
+            ),
+            subtitle: Text(
+              '${_customPlaylists.length} lista(s) guardada(s)',
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            onTap: _customPlaylists.isEmpty
+                ? null
+                : () {
+                    setState(() => _customPlaylists.clear());
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Listas extra removidas.')),
+                    );
+                  },
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Card(
+          color: Color(0xFF1F2937),
+          child: ListTile(
+            leading: Icon(Icons.info_outline, color: Colors.blueAccent),
+            title: Text(
+              'NANOAH STREAM',
+              style: TextStyle(color: Colors.white),
+            ),
+            subtitle: Text(
+              'Versão 1.0.0',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
           ),
         ),
       ],

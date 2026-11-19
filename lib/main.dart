@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 // import 'package:media_kit/media_kit.dart'; // Comentado temporariamente para teste
-import 'screens/login_screen.dart';
+import 'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // MediaKit.ensureInitialized(); // Comentado temporariamente para teste
 
   runApp(const NanoahStreamApp());
@@ -21,9 +21,9 @@ class NanoahStreamApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
-        brightness: Brightness.dark, 
+        brightness: Brightness.dark,
       ),
-      home: const LoginScreen(),
+      home: const SplashScreen(),
     );
   }
 }
