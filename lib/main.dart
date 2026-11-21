@@ -19,9 +19,11 @@ class NanoahStreamApp extends StatelessWidget {
       title: 'Nanoah Stream',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
+        useMaterial3: false,
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
         brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF0B0F19),
       ),
       home: const SplashScreen(),
     );

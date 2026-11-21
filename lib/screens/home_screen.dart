@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import '../widgets/tv_focus_card.dart';
 import 'player_screen.dart';
@@ -17,6 +18,7 @@ class _HomeScreenState extends State<HomeScreen>
     'Geral',
     'Notícias',
     'Filmes',
+    'Série',
     'Religião',
     'Música',
     'Entretenimento',
@@ -44,6 +46,7 @@ class _HomeScreenState extends State<HomeScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _loadSession();
     _loadData();
   }
 
@@ -52,6 +55,20 @@ class _HomeScreenState extends State<HomeScreen>
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    final loggedIn = prefs.getBool('is_logged_in') ?? false;
+    final savedName = prefs.getString('user_name');
+
+    if (!mounted) return;
+    setState(() {
+      _isLoggedIn = loggedIn;
+      _userName = (savedName != null && savedName.trim().isNotEmpty)
+          ? savedName.trim()
+          : (loggedIn ? 'Utilizador Nanoah' : 'Visitante');
+    });
   }
 
   Future<void> _loadData() async {
@@ -135,6 +152,13 @@ class _HomeScreenState extends State<HomeScreen>
             cat.contains('movie') ||
             cat.contains('cinema') ||
             cat.contains('ficcao');
+      case 'serie':
+        return cat.contains('serie') ||
+            cat.contains('series') ||
+            cat.contains('temporada') ||
+            cat.contains('episodio') ||
+            title.contains('serie') ||
+            title.contains('temporada');
       case 'infantil':
         return cat.contains('kids') ||
             cat.contains('crianca') ||
@@ -316,13 +340,17 @@ class _HomeScreenState extends State<HomeScreen>
           ),
           if (_isLoggedIn)
             TextButton(
-              onPressed: () {
+              onPressed: () async {
+                final navigator = Navigator.of(ctx);
+                final messenger = ScaffoldMessenger.of(context);
+                await ApiService.logout();
+                if (!mounted) return;
                 setState(() {
                   _isLoggedIn = false;
                   _userName = 'Visitante';
                 });
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
+                navigator.pop();
+                messenger.showSnackBar(
                   const SnackBar(content: Text('Sessão encerrada.')),
                 );
               },
@@ -333,14 +361,22 @@ class _HomeScreenState extends State<HomeScreen>
             )
           else
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
+                final navigator = Navigator.of(ctx);
+                final messenger = ScaffoldMessenger.of(context);
                 final nome = userController.text.trim();
+                final resolvedName = nome.isEmpty ? 'Utilizador Nanoah' : nome;
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('is_logged_in', true);
+                await prefs.setString('user_name', resolvedName);
+
+                if (!mounted) return;
                 setState(() {
                   _isLoggedIn = true;
-                  _userName = nome.isEmpty ? 'Utilizador Nanoah' : nome;
+                  _userName = resolvedName;
                 });
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
+                navigator.pop();
+                messenger.showSnackBar(
                   SnackBar(content: Text('Bem-vindo, $_userName!')),
                 );
               },
@@ -793,6 +829,52 @@ class _HomeScreenState extends State<HomeScreen>
         const SizedBox(height: 12),
         Card(
           color: const Color(0xFF1F2937),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'DETALHES DO PERFIL',
+                  style: TextStyle(
+                    color: Colors.blueAccent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Utilizador: $_userName',
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Estado da sessão: ${_isLoggedIn ? 'Autenticado' : 'Visitante'}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Modo de visualização: ${_isGridView ? 'Molduras' : 'Lista'}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Reprodução automática: ${_autoPlayEnabled ? 'Ativada' : 'Desativada'}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Listas guardadas: ${_customPlaylists.length}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          color: const Color(0xFF1F2937),
           child: SwitchListTile(
             title: const Text(
               'Visualização em molduras',
@@ -861,6 +943,31 @@ class _HomeScreenState extends State<HomeScreen>
               'Versão 1.0.0',
               style: TextStyle(color: Colors.white70, fontSize: 12),
             ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF111827),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.white10),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                _isLoggedIn ? 'Perfil ativo: $_userName' : 'Perfil de visitante',
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              TextButton(
+                onPressed: _showLoginDialog,
+                child: Text(
+                  _isLoggedIn ? 'Gerir sessão' : 'Entrar',
+                  style: const TextStyle(color: Colors.blueAccent, fontSize: 12),
+                ),
+              ),
+            ],
           ),
         ),
       ],

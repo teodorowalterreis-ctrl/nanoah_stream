@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
 class PlayerScreen extends StatefulWidget {
@@ -21,11 +22,16 @@ class PlayerScreen extends StatefulWidget {
   State<PlayerScreen> createState() => _PlayerScreenState();
 }
 
-class _PlayerScreenState extends State<PlayerScreen> {
+class _PlayerScreenState extends State<PlayerScreen>
+    with WidgetsBindingObserver {
+  static const MethodChannel _screenChannel =
+      MethodChannel('nanoah_stream/keep_screen_on');
+
   VideoPlayerController? _controller;
   bool _isInitialized = false;
   String? _errorMessage;
   bool _showControls = true;
+  bool _wasPlayingBeforePause = false;
 
   late List _playlist;
   late int _currentIndex;
@@ -54,9 +60,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool get _canGoNext =>
       _playlist.length > 1 && _currentIndex < _playlist.length - 1;
 
+  Future<void> _setKeepScreenOn(bool enable) async {
+    try {
+      await _screenChannel.invokeMethod<void>('setKeepScreenOn', {
+        'enable': enable,
+      });
+    } catch (_) {
+      // Ignora se o canal nativo não estiver registado no lado Android
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     if (widget.channels != null && widget.channels!.isNotEmpty) {
       _playlist = widget.channels!;
       _currentIndex =
@@ -68,6 +86,27 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _currentIndex = 0;
     }
     _initVideoPlayer(_currentUrl);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final controller = _controller;
+    if (controller == null || !_isInitialized) return;
+
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      _wasPlayingBeforePause = controller.value.isPlaying;
+      if (_wasPlayingBeforePause) {
+        controller.pause();
+      }
+      _setKeepScreenOn(false);
+    } else if (state == AppLifecycleState.resumed) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      _setKeepScreenOn(true);
+      if (_wasPlayingBeforePause && widget.autoPlay) {
+        controller.play();
+      }
+    }
   }
 
   Future<void> _initVideoPlayer(String rawUrl) async {
@@ -98,6 +137,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _controller = controller;
 
       await controller.initialize();
+      await controller.setLooping(true);
+      await _setKeepScreenOn(true);
 
       if (!mounted) return;
       setState(() {
@@ -144,6 +185,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    _setKeepScreenOn(false);
     _controller?.dispose();
     super.dispose();
   }
