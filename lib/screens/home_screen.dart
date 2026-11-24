@@ -12,60 +12,48 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen>
-    with SingleTickerProviderStateMixin {
-  static const List<String> _quickCategories = [
+class _HomeScreenState extends State<HomeScreen> {
+  static const List<String> _liveSubCategories = [
     'Todos',
     'Geral',
     'Notícias',
-    'Filmes',
-    'Séries',
-    'Novelas',
-    'Religião',
-    'Música',
-    'Entretenimento',
     'Desporto',
+    'Entretenimento',
+    'Música',
     'Infantil',
+    'Religião',
   ];
 
-  late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  final FocusNode _firstChipFocusNode = FocusNode();
   final FocusNode _firstContentFocusNode = FocusNode();
 
-  int _navIndex = 0;
-  bool _isGridView = true;
+  // 0: Canais ao Vivo | 1: Filmes | 2: Séries | 3: Novelas | 4: Listas | 5: Conta & Def.
+  int _selectedSection = 0;
+  bool _tvSubmenuExpanded = true;
+  bool _isGridView = false; // Inicia em lista vertical rápida para TV
   bool _isLoading = true;
   bool _isLoggedIn = false;
   bool _autoPlayEnabled = true;
   String _userName = 'Visitante';
-  String _selectedCategory = 'Todos';
+  String _selectedLiveCategory = 'Todos';
   String _searchQuery = '';
 
   List<dynamic> _liveCategories = [];
   List<dynamic> _movieCategories = [];
-  final List _customPlaylists = [];
+  final List<dynamic> _customPlaylists = [];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging && mounted) {
-        setState(() {});
-      }
-    });
     _loadSession();
     _loadData();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
-    _firstChipFocusNode.dispose();
     _firstContentFocusNode.dispose();
     super.dispose();
   }
@@ -95,13 +83,13 @@ class _HomeScreenState extends State<HomeScreen>
       setState(() {
         if (liveRes is Map && liveRes['status'] == 'success') {
           _liveCategories = liveRes['data'] ?? [];
-        } else if (liveRes is List) {
+        } else if (liveRes is List<dynamic>) {
           _liveCategories = liveRes;
         }
 
         if (movieRes is Map && movieRes['status'] == 'success') {
           _movieCategories = movieRes['data'] ?? [];
-        } else if (movieRes is List) {
+        } else if (movieRes is List<dynamic>) {
           _movieCategories = movieRes;
         }
 
@@ -161,30 +149,32 @@ class _HomeScreenState extends State<HomeScreen>
         title.contains('filme');
   }
 
-  bool _matchesTabContent(int tabIndex, String rawCategory, String rawTitle) {
+  bool _matchesSection(int section, String rawCategory, String rawTitle) {
     final cat = _normalizeText(rawCategory);
     final title = _normalizeText(rawTitle);
 
-    switch (tabIndex) {
-      case 0:
+    switch (section) {
+      case 0: // Canais ao Vivo
         return !_isMovieItem(cat, title) &&
             !_isSeriesItem(cat, title) &&
             !_isNovelaItem(cat, title);
-      case 1:
+      case 1: // Filmes
         return _isMovieItem(cat, title);
-      case 2:
+      case 2: // Séries
         return _isSeriesItem(cat, title);
-      case 3:
+      case 3: // Novelas
         return _isNovelaItem(cat, title);
       default:
         return true;
     }
   }
 
-  bool _matchesCategoryFilter(String rawCategory, String rawTitle) {
-    if (_selectedCategory == 'Todos') return true;
+  bool _matchesLiveSubCategory(String rawCategory, String rawTitle) {
+    if (_selectedSection != 0 || _selectedLiveCategory == 'Todos') {
+      return true;
+    }
 
-    final filter = _normalizeText(_selectedCategory);
+    final filter = _normalizeText(_selectedLiveCategory);
     final cat = _normalizeText(rawCategory);
     final title = _normalizeText(rawTitle);
 
@@ -209,12 +199,6 @@ class _HomeScreenState extends State<HomeScreen>
             cat.contains('futebol') ||
             title.contains('sport') ||
             title.contains('futebol');
-      case 'filmes':
-        return _isMovieItem(cat, title);
-      case 'series':
-        return _isSeriesItem(cat, title);
-      case 'novelas':
-        return _isNovelaItem(cat, title);
       case 'infantil':
         return cat.contains('kids') ||
             cat.contains('crianca') ||
@@ -228,9 +212,8 @@ class _HomeScreenState extends State<HomeScreen>
             cat.contains('evangel');
       case 'entretenimento':
         return cat.contains('varied') ||
-            cat.contains('novela') ||
             cat.contains('show') ||
-            cat.contains('serie');
+            cat.contains('entreten');
       case 'geral':
         return cat.contains('geral') ||
             cat.contains('aberta') ||
@@ -242,77 +225,62 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  List<dynamic> _categoriesForTab(int tabIndex) {
-    if (tabIndex == 0) {
-      final combined = <dynamic>[..._liveCategories, ..._movieCategories];
-      return _filterCategories(combined, tabIndex: tabIndex);
-    }
-    final combined = <dynamic>[..._movieCategories, ..._liveCategories];
-    return _filterCategories(combined, tabIndex: tabIndex);
-  }
-
-  List<dynamic> _filterCategories(
-    List<dynamic> categories, {
-    required int tabIndex,
-  }) {
+  List<Map<String, dynamic>> _getFlattenedItems() {
     final query = _normalizeText(_searchQuery);
-    final List<dynamic> filtered = [];
+    final source = _selectedSection == 0
+        ? <dynamic>[..._liveCategories, ..._movieCategories]
+        : <dynamic>[..._movieCategories, ..._liveCategories];
 
-    for (final cat in categories) {
+    final List<Map<String, dynamic>> result = [];
+
+    for (final cat in source) {
       if (cat is! Map) continue;
-      final catName = (cat['category_name'] ?? 'Categoria').toString();
+      final catName = (cat['category_name'] ?? 'Geral').toString();
       final rawItems = cat['items'] as List<dynamic>? ?? [];
-      final List<dynamic> matchingItems = [];
 
       for (final item in rawItems) {
         if (item is! Map) continue;
         final title = (item['title'] ?? 'Sem Título').toString();
-        final matchesTab = _matchesTabContent(tabIndex, catName, title);
-        final matchesCat = _matchesCategoryFilter(catName, title);
+
+        if (!_matchesSection(_selectedSection, catName, title)) continue;
+        if (!_matchesLiveSubCategory(catName, title)) continue;
+
         final matchesSearch = query.isEmpty ||
             _normalizeText(title).contains(query) ||
             _normalizeText(catName).contains(query);
 
-        if (matchesTab && matchesCat && matchesSearch) {
-          matchingItems.add(item);
+        if (matchesSearch) {
+          result.add({
+            'title': title,
+            'stream_url': (item['stream_url'] ?? '').toString(),
+            'logo_url': (item['logo_url'] ?? '').toString(),
+            'category_name': catName,
+          });
         }
-      }
-
-      if (matchingItems.isNotEmpty) {
-        filtered.add({
-          ...cat,
-          'items': matchingItems,
-        });
       }
     }
 
-    return filtered;
+    return result;
   }
 
-  void _focusDownFromSearch() {
+  void _focusContentArea() {
     FocusScope.of(context).unfocus();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (_firstChipFocusNode.canRequestFocus) {
-        _firstChipFocusNode.requestFocus();
-      } else if (_firstContentFocusNode.canRequestFocus) {
+      if (_firstContentFocusNode.canRequestFocus) {
         _firstContentFocusNode.requestFocus();
       }
     });
   }
 
-  void _openPlayer(List<dynamic> categoryItems, int currentIndex) {
-    final item = categoryItems[currentIndex];
-    final List playlist = [];
-
-    for (final entry in categoryItems) {
-      if (entry is Map) {
-        playlist.add({
-          'title': (entry['title'] ?? 'Sem Título').toString(),
-          'stream_url': (entry['stream_url'] ?? '').toString(),
-        });
-      }
-    }
+  void _openPlayer(List<Map<String, dynamic>> items, int currentIndex) {
+    final item = items[currentIndex];
+    final List<dynamic> playlist = items
+        .map((entry) => {
+              'title': (entry['title'] ?? 'Sem Título').toString(),
+              'stream_url': (entry['stream_url'] ?? '').toString(),
+            })
+        .toList();
 
     Navigator.push(
       context,
@@ -467,138 +435,139 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     );
   }
+
+  String _currentSectionLabel() {
+    switch (_selectedSection) {
+      case 0:
+        return _selectedLiveCategory == 'Todos'
+            ? 'Canais ao Vivo · Todos'
+            : 'Canais ao Vivo · $_selectedLiveCategory';
+      case 1:
+        return 'Filmes';
+      case 2:
+        return 'Séries';
+      case 3:
+        return 'Novelas';
+      case 4:
+        return 'Listas';
+      case 5:
+        return 'Conta & Def.';
+      default:
+        return 'Canais ao Vivo';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF111827),
-        elevation: 0,
-        title: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.play_circle_fill_rounded,
-              color: Colors.blueAccent,
-              size: 22,
-            ),
-            SizedBox(width: 8),
-            Text(
-              "NANOAH STREAM",
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.8,
-                fontSize: 18,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          if (_navIndex == 0)
-            IconButton(
-              tooltip: _isGridView ? 'Ver em lista' : 'Ver em molduras',
-              icon: Icon(
-                _isGridView ? Icons.view_list_rounded : Icons.grid_view_rounded,
-                color: Colors.blueAccent,
-              ),
-              onPressed: () => setState(() => _isGridView = !_isGridView),
-            ),
-          IconButton(
-            tooltip: 'Atualizar canais',
-            icon: const Icon(Icons.refresh, color: Colors.white70),
-            onPressed: _loadData,
-          ),
-        ],
-        bottom: _navIndex == 0
-            ? TabBar(
-                controller: _tabController,
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                indicatorColor: Colors.blueAccent,
-                indicatorWeight: 3,
-                labelColor: Colors.blueAccent,
-                unselectedLabelColor: Colors.grey,
-                labelStyle:
-                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                tabs: const [
-                  Tab(text: "Canais ao Vivo"),
-                  Tab(text: "Filmes"),
-                  Tab(text: "Séries"),
-                  Tab(text: "Novelas"),
-                ],
-              )
-            : null,
-      ),
-      body: _buildBody(),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _navIndex,
-        backgroundColor: const Color(0xFF111827),
-        selectedItemColor: Colors.blueAccent,
-        unselectedItemColor: Colors.grey,
-        type: BottomNavigationBarType.fixed,
-        onTap: (index) => setState(() => _navIndex = index),
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.live_tv_rounded),
-            label: 'Canais',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.playlist_add_rounded),
-            label: 'Listas',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings_rounded),
-            label: 'Conta & Def.',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBody() {
-    if (_navIndex == 1) {
-      return _buildPlaylistsTab();
-    }
-    if (_navIndex == 2) {
-      return _buildSettingsTab();
-    }
-
-    if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: Colors.blueAccent),
-      );
-    }
-
-    return Column(
-      children: [
-        _buildFilterBar(),
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
+      backgroundColor: const Color(0xFF070B14),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Column(
             children: [
-              _buildCategoryList(_categoriesForTab(0)),
-              _buildCategoryList(_categoriesForTab(1)),
-              _buildCategoryList(_categoriesForTab(2)),
-              _buildCategoryList(_categoriesForTab(3)),
+              _buildTopBar(),
+              const SizedBox(height: 10),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      width: 245,
+                      child: _buildLeftSidebar(),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: _buildRightContentPanel(),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 
-  Widget _buildFilterBar() {
+  Widget _buildTopBar() {
     return Container(
-      color: const Color(0xFF111827),
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF101827),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.cyanAccent.withOpacity(0.18)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.cyanAccent.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.play_circle_fill_rounded,
+              color: Colors.cyanAccent,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Text(
+            'NANOAH STREAM',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.6,
+              fontSize: 18,
+            ),
+          ),
+          const Spacer(),
+          if (_selectedSection <= 3)
+            _TvActionButton(
+              icon: _isGridView
+                  ? Icons.view_list_rounded
+                  : Icons.grid_view_rounded,
+              label: _isGridView ? 'Lista' : 'Mosaico',
+              accentColor: Colors.amberAccent,
+              onTap: () => setState(() => _isGridView = !_isGridView),
+            ),
+          if (_selectedSection <= 3) const SizedBox(width: 8),
+          _TvActionButton(
+            icon: Icons.refresh_rounded,
+            label: 'Atualizar',
+            accentColor: Colors.cyanAccent,
+            onTap: _loadData,
+          ),
+          const SizedBox(width: 8),
+          _TvActionButton(
+            icon: _isLoggedIn
+                ? Icons.verified_user_rounded
+                : Icons.account_circle_rounded,
+            label: _isLoggedIn ? _userName : 'Conta',
+            accentColor: Colors.pinkAccent,
+            onTap: () => setState(() => _selectedSection = 5),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLeftSidebar() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF101827),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white12),
+      ),
+      padding: const EdgeInsets.all(10),
       child: Column(
         children: [
           Focus(
             onKeyEvent: (node, event) {
               if (event is KeyDownEvent &&
                   event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                _focusDownFromSearch();
+                _focusContentArea();
                 return KeyEventResult.handled;
               }
               return KeyEventResult.ignored;
@@ -607,19 +576,25 @@ class _HomeScreenState extends State<HomeScreen>
               controller: _searchController,
               focusNode: _searchFocusNode,
               textInputAction: TextInputAction.search,
-              onSubmitted: (_) => _focusDownFromSearch(),
-              style: const TextStyle(color: Colors.white, fontSize: 14),
+              onSubmitted: (_) => _focusContentArea(),
+              style: const TextStyle(color: Colors.white, fontSize: 13),
               onChanged: (val) => setState(() => _searchQuery = val),
               decoration: InputDecoration(
                 isDense: true,
-                hintText: 'Pesquisar canal, filme, série ou novela...',
+                hintText: 'Pesquisar...',
                 hintStyle: const TextStyle(color: Colors.white54, fontSize: 13),
-                prefixIcon:
-                    const Icon(Icons.search, color: Colors.white54, size: 20),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  color: Colors.cyanAccent,
+                  size: 20,
+                ),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.close,
-                            color: Colors.white54, size: 18),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white54,
+                          size: 18,
+                        ),
                         onPressed: () {
                           _searchController.clear();
                           setState(() => _searchQuery = '');
@@ -627,8 +602,8 @@ class _HomeScreenState extends State<HomeScreen>
                       )
                     : null,
                 filled: true,
-                fillColor: const Color(0xFF1F2937),
-                contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                fillColor: const Color(0xFF1A2438),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: BorderSide.none,
@@ -636,30 +611,97 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ),
           ),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 38,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _quickCategories.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                final cat = _quickCategories[index];
-                final isSelected = _selectedCategory == cat;
-                return _FocusableChip(
-                  focusNode: index == 0 ? _firstChipFocusNode : null,
-                  label: cat,
-                  isSelected: isSelected,
-                  onSelect: () => setState(() => _selectedCategory = cat),
-                  onDown: () {
-                    if (_firstContentFocusNode.canRequestFocus) {
-                      _firstContentFocusNode.requestFocus();
-                      return true;
-                    }
-                    return false;
+          const SizedBox(height: 10),
+          Expanded(
+            child: ListView(
+              children: [
+                _SidebarNavTile(
+                  icon: Icons.live_tv_rounded,
+                  label: 'Canais ao Vivo',
+                  activeColor: Colors.cyanAccent,
+                  isSelected: _selectedSection == 0,
+                  trailingIcon: _tvSubmenuExpanded
+                      ? Icons.expand_less_rounded
+                      : Icons.expand_more_rounded,
+                  onTap: () {
+                    setState(() {
+                      if (_selectedSection == 0) {
+                        _tvSubmenuExpanded = !_tvSubmenuExpanded;
+                      } else {
+                        _selectedSection = 0;
+                        _tvSubmenuExpanded = true;
+                      }
+                    });
                   },
-                );
-              },
+                ),
+                if (_selectedSection == 0 && _tvSubmenuExpanded)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 10, top: 4, bottom: 6),
+                    child: Column(
+                      children: _liveSubCategories.map((subCat) {
+                        final isSubSelected = _selectedLiveCategory == subCat;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: _SidebarNavTile(
+                            icon: subCat == 'Todos'
+                                ? Icons.apps_rounded
+                                : Icons.label_important_rounded,
+                            label: subCat,
+                            compact: true,
+                            activeColor: Colors.amberAccent,
+                            isSelected: isSubSelected,
+                            onTap: () {
+                              setState(() {
+                                _selectedSection = 0;
+                                _selectedLiveCategory = subCat;
+                              });
+                            },
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                const SizedBox(height: 4),
+                _SidebarNavTile(
+                  icon: Icons.movie_creation_rounded,
+                  label: 'Filmes',
+                  activeColor: Colors.amberAccent,
+                  isSelected: _selectedSection == 1,
+                  onTap: () => setState(() => _selectedSection = 1),
+                ),
+                const SizedBox(height: 4),
+                _SidebarNavTile(
+                  icon: Icons.tv_rounded,
+                  label: 'Séries',
+                  activeColor: Colors.purpleAccent,
+                  isSelected: _selectedSection == 2,
+                  onTap: () => setState(() => _selectedSection = 2),
+                ),
+                const SizedBox(height: 4),
+                _SidebarNavTile(
+                  icon: Icons.theater_comedy_rounded,
+                  label: 'Novelas',
+                  activeColor: Colors.pinkAccent,
+                  isSelected: _selectedSection == 3,
+                  onTap: () => setState(() => _selectedSection = 3),
+                ),
+                const Divider(color: Colors.white12, height: 16),
+                _SidebarNavTile(
+                  icon: Icons.playlist_add_rounded,
+                  label: 'Listas',
+                  activeColor: Colors.greenAccent,
+                  isSelected: _selectedSection == 4,
+                  onTap: () => setState(() => _selectedSection = 4),
+                ),
+                const SizedBox(height: 4),
+                _SidebarNavTile(
+                  icon: Icons.settings_rounded,
+                  label: 'Conta & Def.',
+                  activeColor: Colors.orangeAccent,
+                  isSelected: _selectedSection == 5,
+                  onTap: () => setState(() => _selectedSection = 5),
+                ),
+              ],
             ),
           ),
         ],
@@ -667,189 +709,186 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildCategoryList(List<dynamic> categories) {
-    if (categories.isEmpty) {
+  Widget _buildRightContentPanel() {
+    if (_selectedSection == 4) {
+      return _buildPlaylistsTab();
+    }
+    if (_selectedSection == 5) {
+      return _buildSettingsTab();
+    }
+
+    if (_isLoading) {
       return const Center(
-        child: Text(
-          "Nenhum conteúdo disponível",
-          style: TextStyle(color: Colors.grey, fontSize: 16),
-        ),
+        child: CircularProgressIndicator(color: Colors.cyanAccent),
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: categories.length,
-      itemBuilder: (context, catIndex) {
-        final category = categories[catIndex];
-        final items = category['items'] as List<dynamic>? ?? [];
-        final categoryName =
-            (category['category_name'] ?? 'Categoria').toString().toUpperCase();
+    final items = _getFlattenedItems();
 
-        if (items.isEmpty) return const SizedBox.shrink();
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  categoryName,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
-                  ),
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF101827),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white12),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 5,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: Colors.cyanAccent,
+                  borderRadius: BorderRadius.circular(4),
                 ),
-                Text(
-                  "${items.length} itens",
-                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                _currentSectionLabel().toUpperCase(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.1,
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            _isGridView
-                ? _buildHorizontalCards(
-                    items,
-                    firstCardFocusNode:
-                        catIndex == 0 ? _firstContentFocusNode : null,
+              ),
+              const Spacer(),
+              Text(
+                '${items.length} itens',
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: items.isEmpty
+                ? const Center(
+                    child: Text(
+                      'Nenhum conteúdo disponível',
+                      style: TextStyle(color: Colors.white54, fontSize: 16),
+                    ),
                   )
-                : _buildCompactList(
-                    items,
-                    categoryName,
-                    firstItemFocusNode:
-                        catIndex == 0 ? _firstContentFocusNode : null,
-                  ),
-            const SizedBox(height: 20),
-          ],
+                : _isGridView
+                    ? _buildMosaicGrid(items)
+                    : _buildVerticalChannelList(items),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVerticalChannelList(List<Map<String, dynamic>> items) {
+    return ListView.separated(
+      itemCount: items.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 6),
+      itemBuilder: (context, index) {
+        final item = items[index];
+        final title = (item['title'] ?? 'Sem Título').toString();
+        final catName = (item['category_name'] ?? '').toString();
+        return _FocusableListRow(
+          focusNode: index == 0 ? _firstContentFocusNode : null,
+          index: index,
+          title: title,
+          subtitle: catName,
+          onTap: () => _openPlayer(items, index),
         );
       },
     );
   }
 
-  Widget _buildHorizontalCards(
-    List<dynamic> items, {
-    FocusNode? firstCardFocusNode,
-  }) {
-    return SizedBox(
-      height: 164,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: items.length,
-        itemBuilder: (context, itemIndex) {
-          final item = items[itemIndex];
-          final logoUrl = (item['logo_url'] ?? '').toString();
-          return Padding(
-            padding: const EdgeInsets.only(right: 12.0),
-            child: SizedBox(
-              width: 134,
-              child: TvFocusCard(
-                focusNode: itemIndex == 0 ? firstCardFocusNode : null,
-                onTap: () => _openPlayer(items, itemIndex),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1F2937),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(12)),
-                          child: logoUrl.isNotEmpty
-                              ? Image.network(
-                                  logoUrl,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (c, e, s) => const Icon(
-                                    Icons.movie,
-                                    color: Colors.grey,
-                                    size: 40,
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.tv,
-                                  color: Colors.blueAccent,
-                                  size: 40,
-                                ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Text(
-                          (item['title'] ?? 'Sem Título').toString(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+  Widget _buildMosaicGrid(List<Map<String, dynamic>> items) {
+    return GridView.builder(
+      itemCount: items.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        childAspectRatio: 0.85,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+      ),
+      itemBuilder: (context, index) {
+        final item = items[index];
+        final logoUrl = (item['logo_url'] ?? '').toString();
+        return TvFocusCard(
+          focusNode: index == 0 ? _firstContentFocusNode : null,
+          onTap: () => _openPlayer(items, index),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A2438),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(12)),
+                    child: logoUrl.isNotEmpty
+                        ? Image.network(
+                            logoUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) => const Icon(
+                              Icons.tv_rounded,
+                              color: Colors.cyanAccent,
+                              size: 36,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.tv_rounded,
+                            color: Colors.cyanAccent,
+                            size: 36,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ],
                   ),
                 ),
-              ),
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(
+                    (item['title'] ?? 'Sem Título').toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
             ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildCompactList(
-    List<dynamic> items,
-    String categoryName, {
-    FocusNode? firstItemFocusNode,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF111827),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: ListView.separated(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: items.length,
-        separatorBuilder: (_, __) =>
-            const Divider(height: 1, color: Colors.white10),
-        itemBuilder: (context, index) {
-          final item = items[index];
-          final title = (item['title'] ?? 'Sem Título').toString();
-          return _FocusableCompactRow(
-            focusNode: index == 0 ? firstItemFocusNode : null,
-            index: index,
-            title: title,
-            categoryName: categoryName,
-            onTap: () => _openPlayer(items, index),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 
   Widget _buildPlaylistsTab() {
-    return Padding(
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF101827),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white12),
+      ),
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blueAccent,
-              foregroundColor: Colors.white,
+              backgroundColor: Colors.cyanAccent,
+              foregroundColor: const Color(0xFF070B14),
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
             onPressed: _showAddPlaylistDialog,
             icon: const Icon(Icons.add),
-            label: const Text('Adicionar Lista de Reprodução'),
+            label: const Text(
+              'Adicionar Lista de Reprodução',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
           const SizedBox(height: 16),
           Expanded(
@@ -857,7 +896,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ? const Center(
                     child: Text(
                       'Nenhuma lista extra adicionada ainda.',
-                      style: TextStyle(color: Colors.grey),
+                      style: TextStyle(color: Colors.white54),
                     ),
                   )
                 : ListView.builder(
@@ -865,11 +904,11 @@ class _HomeScreenState extends State<HomeScreen>
                     itemBuilder: (context, index) {
                       final pl = _customPlaylists[index];
                       return Card(
-                        color: const Color(0xFF1F2937),
+                        color: const Color(0xFF1A2438),
                         child: ListTile(
                           leading: const Icon(
                             Icons.playlist_play,
-                            color: Colors.blueAccent,
+                            color: Colors.cyanAccent,
                           ),
                           title: (pl['name'] ?? '').toString().isEmpty
                               ? const SizedBox.shrink()
@@ -904,304 +943,370 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildSettingsTab() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Card(
-          color: const Color(0xFF1F2937),
-          child: ListTile(
-            leading: Icon(
-              _isLoggedIn ? Icons.verified_user : Icons.person_outline,
-              color: Colors.blueAccent,
-            ),
-            title: Text(
-              _isLoggedIn ? 'Conta: $_userName' : 'Não autenticado',
-              style: const TextStyle(color: Colors.white),
-            ),
-            subtitle: Text(
-              _isLoggedIn ? 'Sessão ativa' : 'Toque para entrar na conta',
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
-            ),
-            trailing: TextButton(
-              onPressed: _showLoginDialog,
-              child: Text(
-                _isLoggedIn ? 'Sair' : 'Entrar',
-                style: TextStyle(
-                  color: _isLoggedIn ? Colors.redAccent : Colors.blueAccent,
-                ),
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF101827),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            color: const Color(0xFF1A2438),
+            child: ListTile(
+              leading: Icon(
+                _isLoggedIn ? Icons.verified_user : Icons.person_outline,
+                color: Colors.cyanAccent,
               ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          color: const Color(0xFF1F2937),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'DETALHES DO PERFIL',
-                  style: TextStyle(
-                    color: Colors.blueAccent,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Utilizador: $_userName',
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Estado da sessão: ${_isLoggedIn ? 'Autenticado' : 'Visitante'}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Modo de visualização: ${_isGridView ? 'Molduras' : 'Lista'}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Reprodução automática: ${_autoPlayEnabled ? 'Ativada' : 'Desativada'}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Listas guardadas: ${_customPlaylists.length}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          color: const Color(0xFF1F2937),
-          child: SwitchListTile(
-            title: const Text(
-              'Visualização em molduras',
-              style: TextStyle(color: Colors.white),
-            ),
-            subtitle: const Text(
-              'Desative para ver os canais em lista organizada',
-              style: TextStyle(color: Colors.white70, fontSize: 12),
-            ),
-            activeColor: Colors.blueAccent,
-            value: _isGridView,
-            onChanged: (val) => setState(() => _isGridView = val),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          color: const Color(0xFF1F2937),
-          child: SwitchListTile(
-            title: const Text(
-              'Reprodução automática',
-              style: TextStyle(color: Colors.white),
-            ),
-            subtitle: const Text(
-              'Iniciar o vídeo automaticamente ao abrir o canal',
-              style: TextStyle(color: Colors.white70, fontSize: 12),
-            ),
-            activeColor: Colors.blueAccent,
-            value: _autoPlayEnabled,
-            onChanged: (val) => setState(() => _autoPlayEnabled = val),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          color: const Color(0xFF1F2937),
-          child: ListTile(
-            leading:
-                const Icon(Icons.cleaning_services_outlined, color: Colors.grey),
-            title: const Text(
-              'Limpar listas adicionadas',
-              style: TextStyle(color: Colors.white),
-            ),
-            subtitle: Text(
-              '${_customPlaylists.length} lista(s) guardada(s)',
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
-            ),
-            onTap: _customPlaylists.isEmpty
-                ? null
-                : () {
-                    setState(() => _customPlaylists.clear());
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Listas extra removidas.')),
-                    );
-                  },
-          ),
-        ),
-        const SizedBox(height: 12),
-        const Card(
-          color: Color(0xFF1F2937),
-          child: ListTile(
-            leading: Icon(Icons.info_outline, color: Colors.blueAccent),
-            title: Text(
-              'NANOAH STREAM',
-              style: TextStyle(color: Colors.white),
-            ),
-            subtitle: Text(
-              'Versão 1.0.0',
-              style: TextStyle(color: Colors.white70, fontSize: 12),
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-          decoration: BoxDecoration(
-            color: const Color(0xFF111827),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.white10),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                _isLoggedIn ? 'Perfil ativo: $_userName' : 'Perfil de visitante',
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              title: Text(
+                _isLoggedIn ? 'Conta: $_userName' : 'Não autenticado',
+                style: const TextStyle(color: Colors.white),
               ),
-              TextButton(
+              subtitle: Text(
+                _isLoggedIn ? 'Sessão ativa' : 'Toque para entrar na conta',
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+              trailing: TextButton(
                 onPressed: _showLoginDialog,
                 child: Text(
-                  _isLoggedIn ? 'Gerir sessão' : 'Entrar',
-                  style: const TextStyle(color: Colors.blueAccent, fontSize: 12),
+                  _isLoggedIn ? 'Sair' : 'Entrar',
+                  style: TextStyle(
+                    color: _isLoggedIn ? Colors.redAccent : Colors.cyanAccent,
+                  ),
                 ),
               ),
-            ],
+            ),
           ),
-        ),
-      ],
+          const SizedBox(height: 12),
+          Card(
+            color: const Color(0xFF1A2438),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'DETALHES DO PERFIL',
+                    style: TextStyle(
+                      color: Colors.cyanAccent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Utilizador: $_userName',
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Estado da sessão: ${_isLoggedIn ? 'Autenticado' : 'Visitante'}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Modo de visualização: ${_isGridView ? 'Mosaico' : 'Lista'}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Reprodução automática: ${_autoPlayEnabled ? 'Ativada' : 'Desativada'}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Listas guardadas: ${_customPlaylists.length}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            color: const Color(0xFF1A2438),
+            child: SwitchListTile(
+              title: const Text(
+                'Visualização em mosaico',
+                style: TextStyle(color: Colors.white),
+              ),
+              subtitle: const Text(
+                'Desative para ver os canais em lista rápida',
+                style: TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+              activeColor: Colors.cyanAccent,
+              value: _isGridView,
+              onChanged: (val) => setState(() => _isGridView = val),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            color: const Color(0xFF1A2438),
+            child: SwitchListTile(
+              title: const Text(
+                'Reprodução automática',
+                style: TextStyle(color: Colors.white),
+              ),
+              subtitle: const Text(
+                'Iniciar o vídeo automaticamente ao abrir o canal',
+                style: TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+              activeColor: Colors.cyanAccent,
+              value: _autoPlayEnabled,
+              onChanged: (val) => setState(() => _autoPlayEnabled = val),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            color: const Color(0xFF1A2438),
+            child: ListTile(
+              leading: const Icon(Icons.cleaning_services_outlined,
+                  color: Colors.grey),
+              title: const Text(
+                'Limpar listas adicionadas',
+                style: TextStyle(color: Colors.white),
+              ),
+              subtitle: Text(
+                '${_customPlaylists.length} lista(s) guardada(s)',
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+              onTap: _customPlaylists.isEmpty
+                  ? null
+                  : () {
+                      setState(() => _customPlaylists.clear());
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Listas extra removidas.')),
+                      );
+                    },
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Card(
+            color: Color(0xFF1A2438),
+            child: ListTile(
+              leading: Icon(Icons.info_outline, color: Colors.cyanAccent),
+              title: Text(
+                'NANOAH STREAM',
+                style: TextStyle(color: Colors.white),
+              ),
+              subtitle: Text(
+                'Versão 1.0.0',
+                style: TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _FocusableChip extends StatefulWidget {
-  final FocusNode? focusNode;
-  final String label;
-  final bool isSelected;
-  final VoidCallback onSelect;
-  final bool Function()? onDown;
+bool _isTvSelectEvent(KeyEvent event) {
+  if (event is! KeyDownEvent) return false;
+  final key = event.logicalKey;
+  return key == LogicalKeyboardKey.select ||
+      key == LogicalKeyboardKey.enter ||
+      key == LogicalKeyboardKey.numpadEnter ||
+      key == LogicalKeyboardKey.gameButtonA ||
+      key.keyLabel == 'Select' ||
+      key.keyLabel == 'Enter';
+}
 
-  const _FocusableChip({
-    this.focusNode,
+class _TvActionButton extends StatefulWidget {
+  final IconData icon;
+  final String label;
+  final Color accentColor;
+  final VoidCallback onTap;
+
+  const _TvActionButton({
+    required this.icon,
     required this.label,
-    required this.isSelected,
-    required this.onSelect,
-    this.onDown,
+    required this.accentColor,
+    required this.onTap,
   });
 
   @override
-  State<_FocusableChip> createState() => _FocusableChipState();
+  State<_TvActionButton> createState() => _TvActionButtonState();
 }
 
-class _FocusableChipState extends State<_FocusableChip> {
+class _TvActionButtonState extends State<_TvActionButton> {
   bool _hasFocus = false;
-
-  bool _isSelectKey(KeyEvent event) {
-    final key = event.logicalKey;
-    return key == LogicalKeyboardKey.select ||
-        key == LogicalKeyboardKey.enter ||
-        key == LogicalKeyboardKey.numpadEnter ||
-        key == LogicalKeyboardKey.gameButtonA ||
-        key.keyLabel == 'Select' ||
-        key.keyLabel == 'Enter';
-  }
 
   @override
   Widget build(BuildContext context) {
     return Focus(
-      focusNode: widget.focusNode,
       onFocusChange: (focused) {
         if (!mounted) return;
         setState(() => _hasFocus = focused);
       },
       onKeyEvent: (node, event) {
-        if (event is KeyDownEvent) {
-          if (_isSelectKey(event)) {
-            widget.onSelect();
-            return KeyEventResult.handled;
-          }
-          if (event.logicalKey == LogicalKeyboardKey.arrowDown &&
-              widget.onDown != null &&
-              widget.onDown!()) {
-            return KeyEventResult.handled;
-          }
+        if (_isTvSelectEvent(event)) {
+          widget.onTap();
+          return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
       },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: _hasFocus ? Colors.amberAccent : Colors.transparent,
-            width: 2,
-          ),
-        ),
-        child: ChoiceChip(
-          label: Text(
-            widget.label,
-            style: TextStyle(
-              color: (widget.isSelected || _hasFocus)
-                  ? Colors.white
-                  : Colors.white70,
-              fontSize: 12,
-              fontWeight: (widget.isSelected || _hasFocus)
-                  ? FontWeight.w700
-                  : FontWeight.normal,
+      child: InkWell(
+        onTap: widget.onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: BoxDecoration(
+            color: _hasFocus
+                ? widget.accentColor.withOpacity(0.24)
+                : const Color(0xFF1A2438),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: _hasFocus ? widget.accentColor : Colors.white12,
+              width: _hasFocus ? 2 : 1,
             ),
           ),
-          selected: widget.isSelected,
-          selectedColor: Colors.blueAccent,
-          backgroundColor:
-              _hasFocus ? const Color(0xFF2563EB) : const Color(0xFF1F2937),
-          side: BorderSide.none,
-          visualDensity: VisualDensity.compact,
-          onSelected: (_) => widget.onSelect(),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(widget.icon, color: widget.accentColor, size: 18),
+              const SizedBox(width: 6),
+              Text(
+                widget.label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _FocusableCompactRow extends StatefulWidget {
-  final FocusNode? focusNode;
-  final int index;
-  final String title;
-  final String categoryName;
+class _SidebarNavTile extends StatefulWidget {
+  final IconData icon;
+  final String label;
+  final Color activeColor;
+  final bool isSelected;
+  final bool compact;
+  final IconData? trailingIcon;
   final VoidCallback onTap;
 
-  const _FocusableCompactRow({
-    this.focusNode,
-    required this.index,
-    required this.title,
-    required this.categoryName,
+  const _SidebarNavTile({
+    required this.icon,
+    required this.label,
+    required this.activeColor,
+    required this.isSelected,
+    this.compact = false,
+    this.trailingIcon,
     required this.onTap,
   });
 
   @override
-  State<_FocusableCompactRow> createState() => _FocusableCompactRowState();
+  State<_SidebarNavTile> createState() => _SidebarNavTileState();
 }
 
-class _FocusableCompactRowState extends State<_FocusableCompactRow> {
+class _SidebarNavTileState extends State<_SidebarNavTile> {
   bool _hasFocus = false;
 
-  bool _isSelectKey(KeyEvent event) {
-    final key = event.logicalKey;
-    return key == LogicalKeyboardKey.select ||
-        key == LogicalKeyboardKey.enter ||
-        key == LogicalKeyboardKey.numpadEnter ||
-        key == LogicalKeyboardKey.gameButtonA ||
-        key.keyLabel == 'Select' ||
-        key.keyLabel == 'Enter';
+  @override
+  Widget build(BuildContext context) {
+    final highlighted = _hasFocus || widget.isSelected;
+    return Focus(
+      onFocusChange: (focused) {
+        if (!mounted) return;
+        setState(() => _hasFocus = focused);
+      },
+      onKeyEvent: (node, event) {
+        if (_isTvSelectEvent(event)) {
+          widget.onTap();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: InkWell(
+        onTap: widget.onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: EdgeInsets.symmetric(
+            horizontal: widget.compact ? 10 : 12,
+            vertical: widget.compact ? 7 : 10,
+          ),
+          decoration: BoxDecoration(
+            color: _hasFocus
+                ? widget.activeColor.withOpacity(0.28)
+                : (widget.isSelected
+                    ? widget.activeColor.withOpacity(0.14)
+                    : Colors.transparent),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: _hasFocus
+                  ? widget.activeColor
+                  : (widget.isSelected
+                      ? widget.activeColor.withOpacity(0.5)
+                      : Colors.transparent),
+              width: _hasFocus ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                widget.icon,
+                color: highlighted ? widget.activeColor : Colors.white60,
+                size: widget.compact ? 16 : 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  widget.label,
+                  style: TextStyle(
+                    color: highlighted ? Colors.white : Colors.white70,
+                    fontSize: widget.compact ? 12 : 13,
+                    fontWeight:
+                        highlighted ? FontWeight.bold : FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (widget.trailingIcon != null)
+                Icon(
+                  widget.trailingIcon,
+                  color: Colors.white54,
+                  size: 18,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
+}
+
+class _FocusableListRow extends StatefulWidget {
+  final FocusNode? focusNode;
+  final int index;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _FocusableListRow({
+    this.focusNode,
+    required this.index,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  State<_FocusableListRow> createState() => _FocusableListRowState();
+}
+
+class _FocusableListRowState extends State<_FocusableListRow> {
+  bool _hasFocus = false;
 
   @override
   Widget build(BuildContext context) {
@@ -1212,58 +1317,80 @@ class _FocusableCompactRowState extends State<_FocusableCompactRow> {
         setState(() => _hasFocus = focused);
       },
       onKeyEvent: (node, event) {
-        if (event is KeyDownEvent && _isSelectKey(event)) {
+        if (_isTvSelectEvent(event)) {
           widget.onTap();
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
       },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        decoration: BoxDecoration(
-          color: _hasFocus
-              ? Colors.blueAccent.withOpacity(0.22)
-              : Colors.transparent,
-          border: Border.all(
-            color: _hasFocus ? Colors.blueAccent : Colors.transparent,
-            width: 2,
+      child: InkWell(
+        onTap: widget.onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: _hasFocus
+                ? Colors.cyanAccent.withOpacity(0.22)
+                : const Color(0xFF1A2438),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: _hasFocus ? Colors.amberAccent : Colors.white10,
+              width: _hasFocus ? 2.5 : 1,
+            ),
           ),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: ListTile(
-          dense: true,
-          leading: CircleAvatar(
-            backgroundColor:
-                _hasFocus ? Colors.blueAccent : const Color(0xFF1F2937),
-            child: Text(
-              '${widget.index + 1}',
-              style: TextStyle(
-                color: _hasFocus ? Colors.white : Colors.blueAccent,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 15,
+                backgroundColor:
+                    _hasFocus ? Colors.amberAccent : const Color(0xFF101827),
+                child: Text(
+                  '${widget.index + 1}',
+                  style: TextStyle(
+                    color: _hasFocus ? const Color(0xFF070B14) : Colors.cyanAccent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.title,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight:
+                            _hasFocus ? FontWeight.w800 : FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (widget.subtitle.isNotEmpty)
+                      Text(
+                        widget.subtitle,
+                        style: TextStyle(
+                          color: _hasFocus ? Colors.amberAccent : Colors.white54,
+                          fontSize: 11,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.play_circle_fill_rounded,
+                color: _hasFocus ? Colors.amberAccent : Colors.cyanAccent,
+                size: 24,
+              ),
+            ],
           ),
-          title: Text(
-            widget.title,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: _hasFocus ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-          subtitle: Text(
-            widget.categoryName,
-            style: TextStyle(
-              color: _hasFocus ? Colors.white70 : Colors.grey,
-              fontSize: 11,
-            ),
-          ),
-          trailing: Icon(
-            Icons.play_circle_fill,
-            color: _hasFocus ? Colors.amberAccent : Colors.blueAccent,
-          ),
-          onTap: widget.onTap,
         ),
       ),
     );
