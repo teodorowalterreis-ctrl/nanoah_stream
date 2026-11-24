@@ -166,15 +166,15 @@ class _HomeScreenState extends State<HomeScreen>
     final title = _normalizeText(rawTitle);
 
     switch (tabIndex) {
-      case 0: // Canais ao Vivo
+      case 0:
         return !_isMovieItem(cat, title) &&
             !_isSeriesItem(cat, title) &&
             !_isNovelaItem(cat, title);
-      case 1: // Filmes
+      case 1:
         return _isMovieItem(cat, title);
-      case 2: // Séries
+      case 2:
         return _isSeriesItem(cat, title);
-      case 3: // Novelas
+      case 3:
         return _isNovelaItem(cat, title);
       default:
         return true;
@@ -327,6 +327,7 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     );
   }
+
   void _showAddPlaylistDialog() {
     final nameController = TextEditingController();
     final urlController = TextEditingController();
@@ -466,7 +467,6 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     );
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -638,7 +638,7 @@ class _HomeScreenState extends State<HomeScreen>
           ),
           const SizedBox(height: 8),
           SizedBox(
-            height: 34,
+            height: 38,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _quickCategories.length,
@@ -646,35 +646,18 @@ class _HomeScreenState extends State<HomeScreen>
               itemBuilder: (context, index) {
                 final cat = _quickCategories[index];
                 final isSelected = _selectedCategory == cat;
-                return Focus(
+                return _FocusableChip(
                   focusNode: index == 0 ? _firstChipFocusNode : null,
-                  onKeyEvent: (node, event) {
-                    if (event is KeyDownEvent &&
-                        event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                      if (_firstContentFocusNode.canRequestFocus) {
-                        _firstContentFocusNode.requestFocus();
-                        return KeyEventResult.handled;
-                      }
+                  label: cat,
+                  isSelected: isSelected,
+                  onSelect: () => setState(() => _selectedCategory = cat),
+                  onDown: () {
+                    if (_firstContentFocusNode.canRequestFocus) {
+                      _firstContentFocusNode.requestFocus();
+                      return true;
                     }
-                    return KeyEventResult.ignored;
+                    return false;
                   },
-                  child: ChoiceChip(
-                    label: Text(
-                      cat,
-                      style: TextStyle(
-                        color: isSelected ? Colors.white : Colors.white70,
-                        fontSize: 12,
-                        fontWeight:
-                            isSelected ? FontWeight.w600 : FontWeight.normal,
-                      ),
-                    ),
-                    selected: isSelected,
-                    selectedColor: Colors.blueAccent,
-                    backgroundColor: const Color(0xFF1F2937),
-                    side: BorderSide.none,
-                    visualDensity: VisualDensity.compact,
-                    onSelected: (_) => setState(() => _selectedCategory = cat),
-                  ),
                 );
               },
             ),
@@ -730,12 +713,14 @@ class _HomeScreenState extends State<HomeScreen>
             _isGridView
                 ? _buildHorizontalCards(
                     items,
-                    firstCardFocusNode: catIndex == 0 ? _firstContentFocusNode : null,
+                    firstCardFocusNode:
+                        catIndex == 0 ? _firstContentFocusNode : null,
                   )
                 : _buildCompactList(
                     items,
                     categoryName,
-                    firstItemFocusNode: catIndex == 0 ? _firstContentFocusNode : null,
+                    firstItemFocusNode:
+                        catIndex == 0 ? _firstContentFocusNode : null,
                   ),
             const SizedBox(height: 20),
           ],
@@ -749,7 +734,7 @@ class _HomeScreenState extends State<HomeScreen>
     FocusNode? firstCardFocusNode,
   }) {
     return SizedBox(
-      height: 160,
+      height: 164,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: items.length,
@@ -759,7 +744,7 @@ class _HomeScreenState extends State<HomeScreen>
           return Padding(
             padding: const EdgeInsets.only(right: 12.0),
             child: SizedBox(
-              width: 130,
+              width: 134,
               child: TvFocusCard(
                 focusNode: itemIndex == 0 ? firstCardFocusNode : null,
                 onTap: () => _openPlayer(items, itemIndex),
@@ -767,7 +752,7 @@ class _HomeScreenState extends State<HomeScreen>
                   decoration: BoxDecoration(
                     color: const Color(0xFF1F2937),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white10),
+                    border: Border.all(color: Colors.white12),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -800,7 +785,7 @@ class _HomeScreenState extends State<HomeScreen>
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w600,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -838,28 +823,11 @@ class _HomeScreenState extends State<HomeScreen>
         itemBuilder: (context, index) {
           final item = items[index];
           final title = (item['title'] ?? 'Sem Título').toString();
-          return ListTile(
+          return _FocusableCompactRow(
             focusNode: index == 0 ? firstItemFocusNode : null,
-            dense: true,
-            leading: CircleAvatar(
-              backgroundColor: const Color(0xFF1F2937),
-              child: Text(
-                '${index + 1}',
-                style: const TextStyle(color: Colors.blueAccent, fontSize: 12),
-              ),
-            ),
-            title: Text(
-              title,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-            ),
-            subtitle: Text(
-              categoryName,
-              style: const TextStyle(color: Colors.grey, fontSize: 11),
-            ),
-            trailing: const Icon(
-              Icons.play_circle_fill,
-              color: Colors.blueAccent,
-            ),
+            index: index,
+            title: title,
+            categoryName: categoryName,
             onTap: () => _openPlayer(items, index),
           );
         },
@@ -1110,6 +1078,194 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ),
       ],
+    );
+  }
+}
+
+class _FocusableChip extends StatefulWidget {
+  final FocusNode? focusNode;
+  final String label;
+  final bool isSelected;
+  final VoidCallback onSelect;
+  final bool Function()? onDown;
+
+  const _FocusableChip({
+    this.focusNode,
+    required this.label,
+    required this.isSelected,
+    required this.onSelect,
+    this.onDown,
+  });
+
+  @override
+  State<_FocusableChip> createState() => _FocusableChipState();
+}
+
+class _FocusableChipState extends State<_FocusableChip> {
+  bool _hasFocus = false;
+
+  bool _isSelectKey(KeyEvent event) {
+    final key = event.logicalKey;
+    return key == LogicalKeyboardKey.select ||
+        key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter ||
+        key == LogicalKeyboardKey.gameButtonA ||
+        key.keyLabel == 'Select' ||
+        key.keyLabel == 'Enter';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      focusNode: widget.focusNode,
+      onFocusChange: (focused) {
+        if (!mounted) return;
+        setState(() => _hasFocus = focused);
+      },
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent) {
+          if (_isSelectKey(event)) {
+            widget.onSelect();
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.arrowDown &&
+              widget.onDown != null &&
+              widget.onDown!()) {
+            return KeyEventResult.handled;
+          }
+        }
+        return KeyEventResult.ignored;
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: _hasFocus ? Colors.amberAccent : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: ChoiceChip(
+          label: Text(
+            widget.label,
+            style: TextStyle(
+              color: (widget.isSelected || _hasFocus)
+                  ? Colors.white
+                  : Colors.white70,
+              fontSize: 12,
+              fontWeight: (widget.isSelected || _hasFocus)
+                  ? FontWeight.w700
+                  : FontWeight.normal,
+            ),
+          ),
+          selected: widget.isSelected,
+          selectedColor: Colors.blueAccent,
+          backgroundColor:
+              _hasFocus ? const Color(0xFF2563EB) : const Color(0xFF1F2937),
+          side: BorderSide.none,
+          visualDensity: VisualDensity.compact,
+          onSelected: (_) => widget.onSelect(),
+        ),
+      ),
+    );
+  }
+}
+
+class _FocusableCompactRow extends StatefulWidget {
+  final FocusNode? focusNode;
+  final int index;
+  final String title;
+  final String categoryName;
+  final VoidCallback onTap;
+
+  const _FocusableCompactRow({
+    this.focusNode,
+    required this.index,
+    required this.title,
+    required this.categoryName,
+    required this.onTap,
+  });
+
+  @override
+  State<_FocusableCompactRow> createState() => _FocusableCompactRowState();
+}
+
+class _FocusableCompactRowState extends State<_FocusableCompactRow> {
+  bool _hasFocus = false;
+
+  bool _isSelectKey(KeyEvent event) {
+    final key = event.logicalKey;
+    return key == LogicalKeyboardKey.select ||
+        key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter ||
+        key == LogicalKeyboardKey.gameButtonA ||
+        key.keyLabel == 'Select' ||
+        key.keyLabel == 'Enter';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      focusNode: widget.focusNode,
+      onFocusChange: (focused) {
+        if (!mounted) return;
+        setState(() => _hasFocus = focused);
+      },
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent && _isSelectKey(event)) {
+          widget.onTap();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        decoration: BoxDecoration(
+          color: _hasFocus
+              ? Colors.blueAccent.withOpacity(0.22)
+              : Colors.transparent,
+          border: Border.all(
+            color: _hasFocus ? Colors.blueAccent : Colors.transparent,
+            width: 2,
+          ),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: ListTile(
+          dense: true,
+          leading: CircleAvatar(
+            backgroundColor:
+                _hasFocus ? Colors.blueAccent : const Color(0xFF1F2937),
+            child: Text(
+              '${widget.index + 1}',
+              style: TextStyle(
+                color: _hasFocus ? Colors.white : Colors.blueAccent,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          title: Text(
+            widget.title,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: _hasFocus ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+          subtitle: Text(
+            widget.categoryName,
+            style: TextStyle(
+              color: _hasFocus ? Colors.white70 : Colors.grey,
+              fontSize: 11,
+            ),
+          ),
+          trailing: Icon(
+            Icons.play_circle_fill,
+            color: _hasFocus ? Colors.amberAccent : Colors.blueAccent,
+          ),
+          onTap: widget.onTap,
+        ),
+      ),
     );
   }
 }
