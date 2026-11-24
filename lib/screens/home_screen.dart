@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import '../widgets/tv_focus_card.dart';
@@ -18,7 +19,8 @@ class _HomeScreenState extends State<HomeScreen>
     'Geral',
     'Notícias',
     'Filmes',
-    'Série',
+    'Séries',
+    'Novelas',
     'Religião',
     'Música',
     'Entretenimento',
@@ -28,6 +30,9 @@ class _HomeScreenState extends State<HomeScreen>
 
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  final FocusNode _firstChipFocusNode = FocusNode();
+  final FocusNode _firstContentFocusNode = FocusNode();
 
   int _navIndex = 0;
   bool _isGridView = true;
@@ -45,7 +50,12 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging && mounted) {
+        setState(() {});
+      }
+    });
     _loadSession();
     _loadData();
   }
@@ -54,6 +64,9 @@ class _HomeScreenState extends State<HomeScreen>
   void dispose() {
     _tabController.dispose();
     _searchController.dispose();
+    _searchFocusNode.dispose();
+    _firstChipFocusNode.dispose();
+    _firstContentFocusNode.dispose();
     super.dispose();
   }
 
@@ -119,6 +132,55 @@ class _HomeScreenState extends State<HomeScreen>
         .trim();
   }
 
+  bool _isSeriesItem(String cat, String title) {
+    return cat.contains('serie') ||
+        cat.contains('series') ||
+        cat.contains('temporada') ||
+        cat.contains('episodio') ||
+        title.contains('serie') ||
+        title.contains('temporada') ||
+        title.contains('episodio');
+  }
+
+  bool _isNovelaItem(String cat, String title) {
+    return cat.contains('novela') ||
+        cat.contains('telenovela') ||
+        title.contains('novela') ||
+        title.contains('capitulo');
+  }
+
+  bool _isMovieItem(String cat, String title) {
+    if (_isSeriesItem(cat, title) || _isNovelaItem(cat, title)) {
+      return false;
+    }
+    return cat.contains('filme') ||
+        cat.contains('movie') ||
+        cat.contains('cinema') ||
+        cat.contains('vod') ||
+        cat.contains('ficcao') ||
+        title.contains('filme');
+  }
+
+  bool _matchesTabContent(int tabIndex, String rawCategory, String rawTitle) {
+    final cat = _normalizeText(rawCategory);
+    final title = _normalizeText(rawTitle);
+
+    switch (tabIndex) {
+      case 0: // Canais ao Vivo
+        return !_isMovieItem(cat, title) &&
+            !_isSeriesItem(cat, title) &&
+            !_isNovelaItem(cat, title);
+      case 1: // Filmes
+        return _isMovieItem(cat, title);
+      case 2: // Séries
+        return _isSeriesItem(cat, title);
+      case 3: // Novelas
+        return _isNovelaItem(cat, title);
+      default:
+        return true;
+    }
+  }
+
   bool _matchesCategoryFilter(String rawCategory, String rawTitle) {
     if (_selectedCategory == 'Todos') return true;
 
@@ -148,17 +210,11 @@ class _HomeScreenState extends State<HomeScreen>
             title.contains('sport') ||
             title.contains('futebol');
       case 'filmes':
-        return cat.contains('filme') ||
-            cat.contains('movie') ||
-            cat.contains('cinema') ||
-            cat.contains('ficcao');
-      case 'serie':
-        return cat.contains('serie') ||
-            cat.contains('series') ||
-            cat.contains('temporada') ||
-            cat.contains('episodio') ||
-            title.contains('serie') ||
-            title.contains('temporada');
+        return _isMovieItem(cat, title);
+      case 'series':
+        return _isSeriesItem(cat, title);
+      case 'novelas':
+        return _isNovelaItem(cat, title);
       case 'infantil':
         return cat.contains('kids') ||
             cat.contains('crianca') ||
@@ -186,7 +242,19 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  List<dynamic> _filterCategories(List<dynamic> categories) {
+  List<dynamic> _categoriesForTab(int tabIndex) {
+    if (tabIndex == 0) {
+      final combined = <dynamic>[..._liveCategories, ..._movieCategories];
+      return _filterCategories(combined, tabIndex: tabIndex);
+    }
+    final combined = <dynamic>[..._movieCategories, ..._liveCategories];
+    return _filterCategories(combined, tabIndex: tabIndex);
+  }
+
+  List<dynamic> _filterCategories(
+    List<dynamic> categories, {
+    required int tabIndex,
+  }) {
     final query = _normalizeText(_searchQuery);
     final List<dynamic> filtered = [];
 
@@ -199,12 +267,13 @@ class _HomeScreenState extends State<HomeScreen>
       for (final item in rawItems) {
         if (item is! Map) continue;
         final title = (item['title'] ?? 'Sem Título').toString();
+        final matchesTab = _matchesTabContent(tabIndex, catName, title);
         final matchesCat = _matchesCategoryFilter(catName, title);
         final matchesSearch = query.isEmpty ||
             _normalizeText(title).contains(query) ||
             _normalizeText(catName).contains(query);
 
-        if (matchesCat && matchesSearch) {
+        if (matchesTab && matchesCat && matchesSearch) {
           matchingItems.add(item);
         }
       }
@@ -218,6 +287,18 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     return filtered;
+  }
+
+  void _focusDownFromSearch() {
+    FocusScope.of(context).unfocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_firstChipFocusNode.canRequestFocus) {
+        _firstChipFocusNode.requestFocus();
+      } else if (_firstContentFocusNode.canRequestFocus) {
+        _firstContentFocusNode.requestFocus();
+      }
+    });
   }
 
   void _openPlayer(List<dynamic> categoryItems, int currentIndex) {
@@ -246,7 +327,6 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     );
   }
-
   void _showAddPlaylistDialog() {
     final nameController = TextEditingController();
     final urlController = TextEditingController();
@@ -394,14 +474,25 @@ class _HomeScreenState extends State<HomeScreen>
       appBar: AppBar(
         backgroundColor: const Color(0xFF111827),
         elevation: 0,
-        title: const Text(
-          "NANOAH STREAM",
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 2,
-            fontSize: 18,
-          ),
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.play_circle_fill_rounded,
+              color: Colors.blueAccent,
+              size: 22,
+            ),
+            SizedBox(width: 8),
+            Text(
+              "NANOAH STREAM",
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.8,
+                fontSize: 18,
+              ),
+            ),
+          ],
         ),
         actions: [
           if (_navIndex == 0)
@@ -422,15 +513,19 @@ class _HomeScreenState extends State<HomeScreen>
         bottom: _navIndex == 0
             ? TabBar(
                 controller: _tabController,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
                 indicatorColor: Colors.blueAccent,
                 indicatorWeight: 3,
                 labelColor: Colors.blueAccent,
                 unselectedLabelColor: Colors.grey,
                 labelStyle:
-                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 tabs: const [
-                  Tab(text: "CANAIS AO VIVO"),
-                  Tab(text: "FILMES & VOD"),
+                  Tab(text: "Canais ao Vivo"),
+                  Tab(text: "Filmes"),
+                  Tab(text: "Séries"),
+                  Tab(text: "Novelas"),
                 ],
               )
             : null,
@@ -482,8 +577,10 @@ class _HomeScreenState extends State<HomeScreen>
           child: TabBarView(
             controller: _tabController,
             children: [
-              _buildCategoryList(_filterCategories(_liveCategories)),
-              _buildCategoryList(_filterCategories(_movieCategories)),
+              _buildCategoryList(_categoriesForTab(0)),
+              _buildCategoryList(_categoriesForTab(1)),
+              _buildCategoryList(_categoriesForTab(2)),
+              _buildCategoryList(_categoriesForTab(3)),
             ],
           ),
         ),
@@ -497,32 +594,45 @@ class _HomeScreenState extends State<HomeScreen>
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
       child: Column(
         children: [
-          TextField(
-            controller: _searchController,
-            style: const TextStyle(color: Colors.white, fontSize: 14),
-            onChanged: (val) => setState(() => _searchQuery = val),
-            decoration: InputDecoration(
-              isDense: true,
-              hintText: 'Pesquisar canal...',
-              hintStyle: const TextStyle(color: Colors.white54, fontSize: 13),
-              prefixIcon:
-                  const Icon(Icons.search, color: Colors.white54, size: 20),
-              suffixIcon: _searchQuery.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.close,
-                          color: Colors.white54, size: 18),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() => _searchQuery = '');
-                      },
-                    )
-                  : null,
-              filled: true,
-              fillColor: const Color(0xFF1F2937),
-              contentPadding: const EdgeInsets.symmetric(vertical: 8),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide.none,
+          Focus(
+            onKeyEvent: (node, event) {
+              if (event is KeyDownEvent &&
+                  event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                _focusDownFromSearch();
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            },
+            child: TextField(
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => _focusDownFromSearch(),
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              onChanged: (val) => setState(() => _searchQuery = val),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: 'Pesquisar canal, filme, série ou novela...',
+                hintStyle: const TextStyle(color: Colors.white54, fontSize: 13),
+                prefixIcon:
+                    const Icon(Icons.search, color: Colors.white54, size: 20),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close,
+                            color: Colors.white54, size: 18),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: const Color(0xFF1F2937),
+                contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
               ),
             ),
           ),
@@ -536,22 +646,35 @@ class _HomeScreenState extends State<HomeScreen>
               itemBuilder: (context, index) {
                 final cat = _quickCategories[index];
                 final isSelected = _selectedCategory == cat;
-                return ChoiceChip(
-                  label: Text(
-                    cat,
-                    style: TextStyle(
-                      color: isSelected ? Colors.white : Colors.white70,
-                      fontSize: 12,
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.normal,
+                return Focus(
+                  focusNode: index == 0 ? _firstChipFocusNode : null,
+                  onKeyEvent: (node, event) {
+                    if (event is KeyDownEvent &&
+                        event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                      if (_firstContentFocusNode.canRequestFocus) {
+                        _firstContentFocusNode.requestFocus();
+                        return KeyEventResult.handled;
+                      }
+                    }
+                    return KeyEventResult.ignored;
+                  },
+                  child: ChoiceChip(
+                    label: Text(
+                      cat,
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : Colors.white70,
+                        fontSize: 12,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.normal,
+                      ),
                     ),
+                    selected: isSelected,
+                    selectedColor: Colors.blueAccent,
+                    backgroundColor: const Color(0xFF1F2937),
+                    side: BorderSide.none,
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (_) => setState(() => _selectedCategory = cat),
                   ),
-                  selected: isSelected,
-                  selectedColor: Colors.blueAccent,
-                  backgroundColor: const Color(0xFF1F2937),
-                  side: BorderSide.none,
-                  visualDensity: VisualDensity.compact,
-                  onSelected: (_) => setState(() => _selectedCategory = cat),
                 );
               },
             ),
@@ -605,8 +728,15 @@ class _HomeScreenState extends State<HomeScreen>
             ),
             const SizedBox(height: 8),
             _isGridView
-                ? _buildHorizontalCards(items)
-                : _buildCompactList(items, categoryName),
+                ? _buildHorizontalCards(
+                    items,
+                    firstCardFocusNode: catIndex == 0 ? _firstContentFocusNode : null,
+                  )
+                : _buildCompactList(
+                    items,
+                    categoryName,
+                    firstItemFocusNode: catIndex == 0 ? _firstContentFocusNode : null,
+                  ),
             const SizedBox(height: 20),
           ],
         );
@@ -614,7 +744,10 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildHorizontalCards(List<dynamic> items) {
+  Widget _buildHorizontalCards(
+    List<dynamic> items, {
+    FocusNode? firstCardFocusNode,
+  }) {
     return SizedBox(
       height: 160,
       child: ListView.builder(
@@ -628,6 +761,7 @@ class _HomeScreenState extends State<HomeScreen>
             child: SizedBox(
               width: 130,
               child: TvFocusCard(
+                focusNode: itemIndex == 0 ? firstCardFocusNode : null,
                 onTap: () => _openPlayer(items, itemIndex),
                 child: Container(
                   decoration: BoxDecoration(
@@ -684,7 +818,11 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildCompactList(List<dynamic> items, String categoryName) {
+  Widget _buildCompactList(
+    List<dynamic> items,
+    String categoryName, {
+    FocusNode? firstItemFocusNode,
+  }) {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF111827),
@@ -701,6 +839,7 @@ class _HomeScreenState extends State<HomeScreen>
           final item = items[index];
           final title = (item['title'] ?? 'Sem Título').toString();
           return ListTile(
+            focusNode: index == 0 ? firstItemFocusNode : null,
             dense: true,
             leading: CircleAvatar(
               backgroundColor: const Color(0xFF1F2937),
