@@ -198,7 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
         title.contains('filme');
   }
 
-  bool _matchesSection(int section, String rawCategory, String rawTitle) {
+  bool _matchesSection(int section, String rawCategory, String rawTitle, {bool isMovieBucket = false}) {
     final cat = _normalizeText(rawCategory);
     final title = _normalizeText(rawTitle);
 
@@ -208,7 +208,10 @@ class _HomeScreenState extends State<HomeScreen> {
             !_isSeriesItem(cat, title) &&
             !_isNovelaItem(cat, title);
       case 1: // Filmes
-        return _isMovieItem(cat, title);
+        if (_isSeriesItem(cat, title) || _isNovelaItem(cat, title)) {
+          return false;
+        }
+        return isMovieBucket || _isMovieItem(cat, title);
       case 2: // Séries
         return _isSeriesItem(cat, title);
       case 3: // Novelas
@@ -276,9 +279,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   List<Map<String, dynamic>> _getFlattenedItems() {
     final query = _normalizeText(_searchQuery);
-    final source = _selectedSection == 0
-        ? <dynamic>[..._liveCategories, ..._movieCategories]
-        : <dynamic>[..._movieCategories, ..._liveCategories];
+    final List<dynamic> source = _selectedSection == 0
+        ? _liveCategories
+        : (_selectedSection == 1 ? _movieCategories : <dynamic>[..._movieCategories, ..._liveCategories]);
 
     final List<Map<String, dynamic>> result = [];
 
@@ -296,7 +299,8 @@ class _HomeScreenState extends State<HomeScreen> {
         if (_hideFailedStreams && _failedStreamUrls.contains(playableUrl)) continue;
         final title = (item['title'] ?? 'Sem Título').toString();
 
-        if (!_matchesSection(_selectedSection, catName, title)) continue;
+        final isFromMovieBucket = _selectedSection == 1 || identical(cat, _movieCategories);
+        if (!_matchesSection(_selectedSection, catName, title, isMovieBucket: isFromMovieBucket)) continue;
         if (!_matchesLiveSubCategory(catName, title)) continue;
 
         final matchesSearch = query.isEmpty ||
