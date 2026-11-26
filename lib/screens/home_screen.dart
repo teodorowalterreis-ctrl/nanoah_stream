@@ -72,27 +72,72 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  List<dynamic> _extractCategories(dynamic response) {
+    if (response is Map && response['status'] == 'success') {
+      final data = response['data'];
+      if (data is List<dynamic>) return data;
+    } else if (response is List<dynamic>) {
+      return response;
+    }
+    return [];
+  }
+
+  void _mergeCategories(List<dynamic> target, List<dynamic> incoming) {
+    for (final cat in incoming) {
+      if (cat is! Map) continue;
+      final catName = (cat['category_name'] ?? 'Geral').toString().trim();
+      final rawItems = cat['items'];
+      if (rawItems is! List<dynamic> || rawItems.isEmpty) continue;
+
+      int existingIndex = -1;
+      for (int i = 0; i < target.length; i++) {
+        final existingCat = target[i];
+        if (existingCat is Map &&
+            (existingCat['category_name'] ?? '').toString().trim().toLowerCase() ==
+                catName.toLowerCase()) {
+          existingIndex = i;
+          break;
+        }
+      }
+
+      if (existingIndex >= 0 && target[existingIndex] is Map) {
+        final existingMap = Map<String, dynamic>.from(target[existingIndex] as Map);
+        final existingItems = List<dynamic>.from(existingMap['items'] as List<dynamic>? ?? []);
+        existingItems.addAll(rawItems);
+        existingMap['items'] = existingItems;
+        target[existingIndex] = existingMap;
+      } else {
+        target.add({
+          'category_name': catName.isEmpty ? 'Geral' : catName,
+          'items': List<dynamic>.from(rawItems),
+        });
+      }
+    }
+  }
+
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
 
     try {
-      final liveRes = await ApiService.getContent('live');
-      final movieRes = await ApiService.getContent('movie');
+      final results = await Future.wait([
+        ApiService.getContent('live'),
+        ApiService.getContent('movie'),
+        ApiService.getSaimoLive(),
+        ApiService.getSaimoVod(),
+      ]);
+
+      final List<dynamic> mergedLive = [];
+      final List<dynamic> mergedMovies = [];
+
+      _mergeCategories(mergedLive, _extractCategories(results[0]));
+      _mergeCategories(mergedMovies, _extractCategories(results[1]));
+      _mergeCategories(mergedLive, _extractCategories(results[2]));
+      _mergeCategories(mergedMovies, _extractCategories(results[3]));
 
       if (!mounted) return;
       setState(() {
-        if (liveRes is Map && liveRes['status'] == 'success') {
-          _liveCategories = liveRes['data'] ?? [];
-        } else if (liveRes is List<dynamic>) {
-          _liveCategories = liveRes;
-        }
-
-        if (movieRes is Map && movieRes['status'] == 'success') {
-          _movieCategories = movieRes['data'] ?? [];
-        } else if (movieRes is List<dynamic>) {
-          _movieCategories = movieRes;
-        }
-
+        _liveCategories = mergedLive;
+        _movieCategories = mergedMovies;
         _isLoading = false;
       });
     } catch (e) {
@@ -250,11 +295,23 @@ class _HomeScreenState extends State<HomeScreen> {
             _normalizeText(catName).contains(query);
 
         if (matchesSearch) {
+          final sources = item['sources'] is List<dynamic>
+              ? List<dynamic>.from(item['sources'] as List<dynamic>)
+              : <dynamic>[];
+          final firstSource =
+              (sources.isNotEmpty && sources.first is Map)
+                  ? (sources.first as Map)
+                  : null;
+
           result.add({
             'title': title,
             'stream_url': (item['stream_url'] ?? '').toString(),
             'logo_url': (item['logo_url'] ?? '').toString(),
             'category_name': catName,
+            'sources': sources,
+            'referer': (item['referer'] ?? firstSource?['referer'] ?? '').toString(),
+            'user_agent':
+                (item['user_agent'] ?? firstSource?['user_agent'] ?? '').toString(),
           });
         }
       }
@@ -279,6 +336,9 @@ class _HomeScreenState extends State<HomeScreen> {
         .map((entry) => {
               'title': (entry['title'] ?? 'Sem Título').toString(),
               'stream_url': (entry['stream_url'] ?? '').toString(),
+              'referer': (entry['referer'] ?? '').toString(),
+              'user_agent': (entry['user_agent'] ?? '').toString(),
+              'sources': entry['sources'] ?? const [],
             })
         .toList();
 

@@ -100,4 +100,68 @@ class ApiService {
       return {"status": "error", "message": "Erro ao carregar conteúdos: $e"};
     }
   }
+
+  static String _resolveEndpoint(String fileName, {String? customUrl}) {
+    if (customUrl != null && customUrl.trim().isNotEmpty) {
+      return customUrl.trim();
+    }
+    return ApiConfig.contentEndpoint.replaceFirst(
+      RegExp(r'[^/]+(\?.*)?$'),
+      fileName,
+    );
+  }
+
+  static Future<dynamic> getSaimoLive({String? customUrl}) async {
+    try {
+      final String endpoint =
+          _resolveEndpoint('saimo_live.php', customUrl: customUrl);
+
+      final response = await http
+          .get(Uri.parse(endpoint))
+          .timeout(const Duration(seconds: 15));
+
+      if (response.body.isEmpty) {
+        return {
+          "status": "error",
+          "message": "Servidor não retornou resposta.",
+          "data": []
+        };
+      }
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {
+        "status": "error",
+        "message": "Erro ao carregar canais Saimo: $e",
+        "data": []
+      };
+    }
+  }
+
+  static Future<dynamic> getSaimoVod({String? customUrl}) async {
+    try {
+      final String endpoint =
+          _resolveEndpoint('saimo_vod.php', customUrl: customUrl);
+
+      final response = await http
+          .get(Uri.parse(endpoint))
+          .timeout(const Duration(seconds: 15));
+
+      if (response.body.isEmpty) {
+        return {
+          "status": "error",
+          "message": "Servidor não retornou resposta.",
+          "data": []
+        };
+      }
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {
+        "status": "error",
+        "message": "Erro ao carregar catálogo Saimo: $e",
+        "data": []
+      };
+    }
+  }
 }

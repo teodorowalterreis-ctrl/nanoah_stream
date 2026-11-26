@@ -36,23 +36,65 @@ class _PlayerScreenState extends State<PlayerScreen>
   late List _playlist;
   late int _currentIndex;
 
-  String get _currentTitle {
+  Map<dynamic, dynamic>? get _currentItemMap {
     if (_playlist.isNotEmpty &&
         _currentIndex >= 0 &&
-        _currentIndex < _playlist.length) {
-      return (_playlist[_currentIndex]['title'] ?? widget.title).toString();
+        _currentIndex < _playlist.length &&
+        _playlist[_currentIndex] is Map) {
+      return _playlist[_currentIndex] as Map<dynamic, dynamic>;
+    }
+    return null;
+  }
+
+  String get _currentTitle {
+    final item = _currentItemMap;
+    if (item != null && item['title'] != null) {
+      return item['title'].toString();
     }
     return widget.title;
   }
 
   String get _currentUrl {
-    if (_playlist.isNotEmpty &&
-        _currentIndex >= 0 &&
-        _currentIndex < _playlist.length) {
-      return (_playlist[_currentIndex]['stream_url'] ?? widget.streamUrl)
-          .toString();
+    final item = _currentItemMap;
+    if (item != null && item['stream_url'] != null) {
+      return item['stream_url'].toString();
     }
     return widget.streamUrl;
+  }
+
+  Map<String, String> _resolveHeadersForCurrentItem() {
+    final Map<String, String> headers = {};
+    final item = _currentItemMap;
+    if (item == null) return headers;
+
+    String referer = (item['referer'] ?? '').toString().trim();
+    String userAgent = (item['user_agent'] ?? '').toString().trim();
+
+    if ((referer.isEmpty || userAgent.isEmpty) && item['sources'] is List) {
+      for (final src in (item['sources'] as List)) {
+        if (src is Map) {
+          final srcUrl = (src['url'] ?? '').toString().trim();
+          if (srcUrl == _currentUrl.trim() || srcUrl.isNotEmpty) {
+            if (referer.isEmpty) {
+              referer = (src['referer'] ?? '').toString().trim();
+            }
+            if (userAgent.isEmpty) {
+              userAgent = (src['user_agent'] ?? '').toString().trim();
+            }
+            if (srcUrl == _currentUrl.trim()) break;
+          }
+        }
+      }
+    }
+
+    if (referer.isNotEmpty) {
+      headers['Referer'] = referer;
+    }
+    if (userAgent.isNotEmpty) {
+      headers['User-Agent'] = userAgent;
+    }
+
+    return headers;
   }
 
   bool get _canGoPrevious => _playlist.length > 1 && _currentIndex > 0;
@@ -133,7 +175,10 @@ class _PlayerScreenState extends State<PlayerScreen>
         throw Exception('URL inválido ou sem http/https: "$cleanUrl"');
       }
 
-      final controller = VideoPlayerController.networkUrl(uri);
+      final headers = _resolveHeadersForCurrentItem();
+      final controller = headers.isNotEmpty
+          ? VideoPlayerController.networkUrl(uri, httpHeaders: headers)
+          : VideoPlayerController.networkUrl(uri);
       _controller = controller;
 
       await controller.initialize();
