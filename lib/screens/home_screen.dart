@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
+import '../services/content_helper.dart';
 import '../widgets/tv_focus_card.dart';
 import 'player_screen.dart';
 
@@ -35,6 +36,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   bool _isLoggedIn = false;
   bool _autoPlayEnabled = true;
+  bool _translateEnToPt = true;
+  bool _hideFailedStreams = true;
   String _userName = 'Visitante';
   String _selectedLiveCategory = 'Todos';
   String _searchQuery = '';
@@ -42,6 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _liveCategories = [];
   List<dynamic> _movieCategories = [];
   final List<dynamic> _customPlaylists = [];
+  final Set<String> _failedStreamUrls = {};
 
   @override
   void initState() {
@@ -283,8 +287,13 @@ class _HomeScreenState extends State<HomeScreen> {
       final catName = (cat['category_name'] ?? 'Geral').toString();
       final rawItems = cat['items'] as List<dynamic>? ?? [];
 
+      final translatedCat = ContentHelper.translateEnToPt(catName, enabled: _translateEnToPt);
       for (final item in rawItems) {
         if (item is! Map) continue;
+        if (ContentHelper.isMarkedOffline(item)) continue;
+        final playableUrl = ContentHelper.resolvePlayableUrl(item);
+        if (playableUrl.isEmpty) continue;
+        if (_hideFailedStreams && _failedStreamUrls.contains(playableUrl)) continue;
         final title = (item['title'] ?? 'Sem Título').toString();
 
         if (!_matchesSection(_selectedSection, catName, title)) continue;
@@ -305,9 +314,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
           result.add({
             'title': title,
-            'stream_url': (item['stream_url'] ?? '').toString(),
+            'stream_url': playableUrl,
             'logo_url': (item['logo_url'] ?? '').toString(),
-            'category_name': catName,
+            'category_name': translatedCat,
             'sources': sources,
             'referer': (item['referer'] ?? firstSource?['referer'] ?? '').toString(),
             'user_agent':
@@ -1116,6 +1125,40 @@ class _HomeScreenState extends State<HomeScreen> {
               activeColor: Colors.cyanAccent,
               value: _autoPlayEnabled,
               onChanged: (val) => setState(() => _autoPlayEnabled = val),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            color: const Color(0xFF1A2438),
+            child: SwitchListTile(
+              title: const Text(
+                'Traduzir termos EN -> PT',
+                style: TextStyle(color: Colors.white),
+              ),
+              subtitle: const Text(
+                'Traduz categorias em inglês para português',
+                style: TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+              activeColor: Colors.cyanAccent,
+              value: _translateEnToPt,
+              onChanged: (val) => setState(() => _translateEnToPt = val),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            color: const Color(0xFF1A2438),
+            child: SwitchListTile(
+              title: const Text(
+                'Ocultar canais com falha na sessão',
+                style: TextStyle(color: Colors.white),
+              ),
+              subtitle: const Text(
+                '\${_failedStreamUrls.length} canal(is) marcado(s) na sessão',
+                style: TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+              activeColor: Colors.cyanAccent,
+              value: _hideFailedStreams,
+              onChanged: (val) => setState(() => _hideFailedStreams = val),
             ),
           ),
           const SizedBox(height: 12),
